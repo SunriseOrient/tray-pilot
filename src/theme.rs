@@ -98,6 +98,17 @@ pub fn theme_preference() -> egui::ThemePreference {
     }
 }
 
+/// 菜单阴影（比面板更轻，避免四周出现厚重的透明边框感）。
+pub fn menu_shadow() -> egui::Shadow {
+    let alpha = if DARK.load(Ordering::Relaxed) { 150 } else { 38 };
+    egui::Shadow {
+        offset: [0, 6],
+        blur: 20,
+        spread: 0,
+        color: egui::Color32::from_rgba_unmultiplied(0, 0, 0, alpha),
+    }
+}
+
 /// 系统当前是否为深色模式。
 fn is_dark(ctx: &egui::Context) -> bool {
     match ctx.options(|o| o.theme_preference) {

@@ -115,6 +115,77 @@ pub fn divider(ui: &mut egui::Ui, width: f32) {
     );
 }
 
+/// 菜单里的分组分隔线（上下各留一点空白）。
+pub fn menu_separator(ui: &mut egui::Ui, width: f32) {
+    ui.add_space(5.0);
+    divider(ui, width);
+    ui.add_space(5.0);
+}
+
+/// 原生菜单风格的条目：单行文字，悬停整行高亮。
+pub fn menu_item(
+    ui: &mut egui::Ui,
+    label: &str,
+    id: &str,
+    width: f32,
+) -> egui::Response {
+    let pal = theme::palette();
+    let height = crate::app::MENU_ITEM_HEIGHT;
+
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
+    let response = ui.interact(rect, ui.make_persistent_id(id), egui::Sense::click());
+    let hovered = response.hovered();
+
+    if hovered {
+        ui.painter().rect(
+            rect,
+            egui::CornerRadius::from(6u8),
+            pal.accent,
+            egui::Stroke::NONE,
+            egui::StrokeKind::Inside,
+        );
+    }
+
+    let color = if hovered {
+        egui::Color32::WHITE
+    } else {
+        pal.text
+    };
+    let font = egui::FontId::proportional(13.5);
+    let text = ellipsize(ui, label, font.clone(), width - 24.0);
+    let galley = ui.painter().layout_no_wrap(text, font, color);
+    ui.painter().galley(
+        egui::pos2(
+            rect.left() + 12.0,
+            rect.center().y - galley.size().y * 0.5,
+        ),
+        galley,
+        color,
+    );
+
+    response
+}
+
+/// 文本超出宽度时截断并加省略号。
+fn ellipsize(ui: &egui::Ui, text: &str, font: egui::FontId, max_width: f32) -> String {
+    let painter = ui.painter();
+    let galley = painter.layout_no_wrap(text.to_owned(), font.clone(), egui::Color32::WHITE);
+    if galley.size().x <= max_width {
+        return text.to_owned();
+    }
+
+    let mut chars: Vec<char> = text.chars().collect();
+    while !chars.is_empty() {
+        chars.pop();
+        let candidate: String = chars.iter().collect();
+        let measured = painter.layout_no_wrap(candidate.clone(), font.clone(), egui::Color32::WHITE);
+        if measured.size().x <= max_width - 12.0 {
+            return format!("{candidate}…");
+        }
+    }
+    String::new()
+}
+
 /// 开关。
 pub fn switch(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
     let pal = theme::palette();

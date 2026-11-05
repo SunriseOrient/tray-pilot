@@ -39,7 +39,7 @@ pub fn show(ui: &mut egui::Ui) {
     ui.painter().add(frame.paint(panel));
 
     let draft_active = app::shared().draft.is_some();
-    let content = panel.shrink(20.0);
+    let content = panel.shrink(app::PANEL_PADDING);
 
     ui.scope_builder(egui::UiBuilder::new().max_rect(content), |ui| {
         if draft_active {
@@ -291,7 +291,7 @@ fn show_modal(ui: &mut egui::Ui, panel: egui::Rect) {
     let mut cancel = false;
     let mut save = false;
 
-    let inner = rect.shrink(20.0);
+    let inner = rect.shrink(app::PANEL_PADDING);
     ui.scope_builder(egui::UiBuilder::new().max_rect(inner), |ui| {
         ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
 

@@ -9,14 +9,16 @@ use tray_icon::TrayIcon;
 use crate::config::{Action, AppConfig};
 use crate::{exec, theme};
 
-/// 弹出菜单的宽度（点）。
-pub const POPUP_WIDTH: f32 = 320.0;
-/// 弹出菜单中单个动作的高度（点）。
-pub const POPUP_ITEM_HEIGHT: f32 = 46.0;
+/// 弹出菜单面板宽度（点）。
+pub const POPUP_WIDTH: f32 = 250.0;
+/// 菜单条目高度（点）。
+pub const MENU_ITEM_HEIGHT: f32 = 30.0;
+/// 菜单内容内边距（点）。
+pub const MENU_PADDING: f32 = 6.0;
 /// 面板内边距（点）。
-pub const PANEL_PADDING: f32 = 14.0;
+pub const PANEL_PADDING: f32 = 20.0;
 /// 窗口四周留给阴影的空白（点）。
-pub const WINDOW_MARGIN: f32 = 18.0;
+pub const WINDOW_MARGIN: f32 = 10.0;
 
 /// 弹出菜单窗口标题。
 pub const POPUP_TITLE: &str = "TrayPilot · 常用动作";
@@ -279,6 +281,7 @@ impl eframe::App for TrayPilotApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         // 根窗口只是 egui 上下文的宿主，始终保持隐藏。
+        ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Visible(false));
         self.show_children(&ctx);
     }
 
@@ -321,19 +324,11 @@ fn popup_spec(
 
 /// 弹出菜单面板的高度（点）。
 pub fn popup_panel_height(count: usize) -> f32 {
-    let header = 26.0;
-    let separator = 1.0;
-    let gap = 9.0;
-    let footer = 34.0;
-    let content = header + gap
-        + separator
-        + gap
-        + count as f32 * POPUP_ITEM_HEIGHT
-        + gap
-        + separator
-        + gap
-        + footer;
-    content + 2.0 * PANEL_PADDING
+    // 动作条目 + 分组分隔线 + 「编辑」「退出」两项
+    let content = count as f32 * MENU_ITEM_HEIGHT
+        + if count > 0 { 11.0 } else { 0.0 }
+        + 2.0 * MENU_ITEM_HEIGHT;
+    content + 2.0 * MENU_PADDING
 }
 
 /// 计算编辑面板窗口的位置与尺寸（居中）。

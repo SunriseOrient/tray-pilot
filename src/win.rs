@@ -8,10 +8,11 @@ use std::cell::RefCell;
 
 use windows::core::BOOL;
 use windows::Win32::Foundation::{HWND, LPARAM};
+use windows::Win32::System::Threading::AttachThreadInput;
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible,
-    SetForegroundWindow, SetWindowPos, ShowWindow, HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE,
-    SW_RESTORE,
+    BringWindowToTop, EnumWindows, GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW,
+    GetWindowThreadProcessId, IsWindowVisible, SetForegroundWindow, SetWindowPos, ShowWindow,
+    HWND_TOPMOST, SWP_NOMOVE, SWP_NOSIZE, SW_RESTORE,
 };
 
 thread_local! {
@@ -55,6 +56,30 @@ unsafe extern "system" fn enum_proc(hwnd: HWND, _lparam: LPARAM) -> BOOL {
     true.into()
 }
 
+/// 强制把窗口置于前台。
+///
+/// 普通的 `SetForegroundWindow` 会被 Windows 的前台锁拦下（用户刚点击的是
+/// 别的程序时），这里借用 `AttachThreadInput` 技巧绕过限制——托盘菜单必须
+/// 立刻拿到焦点，否则第一次点击只会被用来激活窗口，按钮收不到。
+fn force_foreground(hwnd: HWND) {
+    unsafe {
+        let mut foreground_thread = 0u32;
+        GetWindowThreadProcessId(GetForegroundWindow(), Some(&mut foreground_thread));
+        let mut own_thread = 0u32;
+        GetWindowThreadProcessId(hwnd, Some(&mut own_thread));
+
+        let attached = foreground_thread != 0 && foreground_thread != own_thread;
+        if attached {
+            let _ = AttachThreadInput(own_thread, foreground_thread, true);
+        }
+        let _ = SetForegroundWindow(hwnd);
+        let _ = BringWindowToTop(hwnd);
+        if attached {
+            let _ = AttachThreadInput(own_thread, foreground_thread, false);
+        }
+    }
+}
+
 /// 显示并激活标题为 `title` 的窗口。
 ///
 /// `topmost` 为真时把窗口置顶（托盘菜单需要始终显示在其它窗口之上）。
@@ -75,7 +100,7 @@ pub fn activate(title: &str, topmost: bool) {
     unsafe {
         // SW_RESTORE 会触发一次重绘，让窗口真正被系统合成出来。
         let _ = ShowWindow(hwnd, SW_RESTORE);
-        let _ = SetForegroundWindow(hwnd);
+        force_foreground(hwnd);
         if topmost {
             let _ = SetWindowPos(
                 hwnd,
