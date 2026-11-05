@@ -73,7 +73,6 @@ pub fn show(ui: &mut egui::Ui) {
     let pointer = ui.ctx().input(|i| i.pointer.latest_pos());
     let outside = pressed && pointer.is_some_and(|p| !panel.contains(p));
     let escape = ui.ctx().input(|i| i.key_pressed(egui::Key::Escape));
-    eprintln!("[dbg] popup show: pressed={pressed} pointer={pointer:?} outside={outside} escape={escape}");
     if outside || escape {
         app::close_popup();
         return;
@@ -81,7 +80,6 @@ pub fn show(ui: &mut egui::Ui) {
 
     // 失焦自动关闭（首次获得焦点后生效，避免刚弹出就被误关）。
     let focused = ui.ctx().input(|i| i.viewport().focused.unwrap_or(false));
-    eprintln!("[dbg] focused={focused}");
     let now = Instant::now();
     let mut should_close = false;
     {

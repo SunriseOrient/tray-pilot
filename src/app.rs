@@ -66,6 +66,8 @@ pub struct Popup {
     pub close_at: Option<Instant>,
     /// 已经渲染的帧数：第 2 帧时窗口已存在，可以安全地请求焦点。
     pub frames: u32,
+    /// 是否处于显示状态。窗口本身常驻，关闭只是隐藏。
+    pub visible: bool,
 }
 
 /// 编辑面板的运行状态。
@@ -224,24 +226,33 @@ impl TrayPilotApp {
         }
 
         let commands = std::mem::take(&mut sh.pending);
+        let mut opened = false;
         for cmd in commands {
             match cmd {
                 TrayCommand::ShowPopup { tray } => {
                     let count = sh.config.actions.len();
                     let (pos, size) = popup_spec(ctx, tray, count);
-                    sh.popup = Some(Popup {
-                        pos,
-                        size,
-                        opened_at: Instant::now(),
-                        focused_once: false,
-                        status: None,
-                        close_at: None,
-                        frames: 0,
-                    });
+                    if let Some(popup) = sh.popup.as_mut() {
+                        popup.pos = pos;
+                        popup.size = size;
+                        popup.visible = true;
+                        popup.opened_at = Instant::now();
+                        popup.focused_once = false;
+                        popup.status = None;
+                        popup.close_at = None;
+                        popup.frames = 0;
+                        opened = true;
+                    }
                 }
             }
         }
 
+        drop(sh);
+        if opened {
+            ctx.request_repaint();
+        }
+
+        let mut sh = shared();
         // 提示信息过期
         let now = Instant::now();
         if sh.toast.as_ref().is_some_and(|t| now >= t.until) {
@@ -254,7 +265,11 @@ impl TrayPilotApp {
             .as_ref()
             .is_some_and(|p| p.close_at.is_some_and(|at| now >= at));
         if expired {
-            sh.popup = None;
+            if let Some(popup) = sh.popup.as_mut() {
+                popup.visible = false;
+                popup.status = None;
+                popup.close_at = None;
+            }
         }
     }
 
@@ -262,9 +277,25 @@ impl TrayPilotApp {
     fn show_children(&self, ctx: &egui::Context) {
         let (popup, editor) = {
             let mut sh = shared();
+            // 菜单窗口常驻：启动时创建好并保持隐藏，点击托盘只是切换可见性。
+            // 这样既不会出现「窗口已显示但还没画出来」的白框，也没有新建窗口的延迟。
+            if sh.popup.is_none() {
+                let count = sh.config.actions.len();
+                let (pos, size) = initial_popup_spec(ctx, count);
+                sh.popup = Some(Popup {
+                    pos,
+                    size,
+                    opened_at: Instant::now(),
+                    focused_once: false,
+                    status: None,
+                    close_at: None,
+                    frames: 0,
+                    visible: false,
+                });
+            }
             let popup = sh.popup.as_mut().map(|p| {
                 p.frames += 1;
-                (p.pos, p.size, p.frames)
+                (p.pos, p.size, p.visible, p.frames)
             });
             let editor = sh.editor.as_mut().map(|e| {
                 e.frames += 1;
@@ -273,18 +304,29 @@ impl TrayPilotApp {
             (popup, editor)
         };
 
-        if let Some((pos, size, frames)) = popup {
+        if let Some((pos, size, visible, frames)) = popup {
+            if !visible {
+                // 预先画几帧，把内容渲染到窗口里，之后显示时不会有空白帧。
+                if frames <= 3 {
+                    ctx.send_viewport_cmd_to(popup_id(), egui::ViewportCommand::RequestPaintWhileHidden);
+                }
+                // 隐藏时把窗口挪到屏幕外，避免它挡住鼠标。
+                ctx.send_viewport_cmd_to(popup_id(), egui::ViewportCommand::Visible(false));
+            }
+
             let builder = egui::ViewportBuilder::default()
                 .with_title(POPUP_TITLE)
                 .with_decorations(false)
                 .with_transparent(true)
                 .with_resizable(false)
                 .with_always_on_top()
+                .with_visible(visible)
                 .with_inner_size(size)
                 .with_position(pos);
             ctx.show_viewport_deferred(popup_id(), builder, |ui, _| crate::ui::popup::show(ui));
-            // 窗口创建后需要显式显示并激活，否则不会被系统合成到屏幕上。
-            if frames == 2 {
+
+            // 显示出来并激活窗口，否则鼠标事件收不到。
+            if visible && frames == 1 {
                 crate::win::activate(POPUP_TITLE, true);
             }
         }
@@ -303,6 +345,7 @@ impl TrayPilotApp {
                 .with_transparent(false)
                 .with_resizable(false)
                 .with_maximize_button(true)
+                .with_visible(frames > 1)
                 .with_inner_size(size)
                 .with_position(pos);
             ctx.show_viewport_deferred(editor_id(), builder, |ui, _| crate::ui::editor::show(ui));
@@ -332,6 +375,20 @@ impl eframe::App for TrayPilotApp {
         // 透明背景：圆角与阴影由 egui 自己绘制。
         [0.0, 0.0, 0.0, 0.0]
     }
+}
+
+/// 菜单窗口在启动时的初始位置与尺寸（不可见，仅用于建窗）。
+fn initial_popup_spec(ctx: &egui::Context, count: usize) -> (egui::Pos2, egui::Vec2) {
+    let monitor = ctx
+        .input(|i| i.viewport().monitor_size)
+        .unwrap_or(egui::vec2(1920.0, 1080.0));
+    let panel_h = popup_panel_height(count);
+    let win_w = POPUP_WIDTH;
+    let win_h = panel_h;
+    (
+        egui::pos2(monitor.x - win_w - 8.0, monitor.y - 48.0 - win_h),
+        egui::vec2(win_w, win_h),
+    )
 }
 
 /// 计算弹出菜单窗口的位置与尺寸。
@@ -409,7 +466,12 @@ pub fn close_editor() {
 
 /// 关闭弹出菜单。
 pub fn close_popup() {
-    shared().popup = None;
+    let mut sh = shared();
+    if let Some(popup) = sh.popup.as_mut() {
+        popup.visible = false;
+        popup.status = None;
+        popup.close_at = None;
+    }
 }
 
 /// 设置弹出菜单上的状态提示，并在一段时间后自动关闭。
