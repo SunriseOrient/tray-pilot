@@ -14,8 +14,8 @@ pub enum ButtonKind {
     Primary,
     /// 次要按钮，描边。
     Ghost,
-    /// 危险操作，描边 + 危险色。
-    Danger,
+    /// 危险操作主按钮，实心危险色（用于删除确认）。
+    DangerSolid,
 }
 
 /// 自绘的扁平圆角按钮，完全掌控外观。
@@ -31,7 +31,7 @@ pub fn flat_button(
     let (mut bg, mut fg, border) = match kind {
         ButtonKind::Primary => (pal.accent, egui::Color32::WHITE, pal.accent),
         ButtonKind::Ghost => (egui::Color32::TRANSPARENT, pal.text_dim, pal.border),
-        ButtonKind::Danger => (egui::Color32::TRANSPARENT, pal.danger, pal.border),
+        ButtonKind::DangerSolid => (pal.danger, egui::Color32::WHITE, pal.danger),
     };
 
     if response.hovered() {
@@ -41,14 +41,13 @@ pub fn flat_button(
                 bg = pal.bg_soft;
                 fg = pal.text;
             }
-            ButtonKind::Danger => {
-                bg = pal.danger_soft;
-                fg = pal.danger;
+            ButtonKind::DangerSolid => {
+                bg = egui::Color32::from_rgb(232, 74, 92);
             }
         }
     }
 
-    let stroke = if kind == ButtonKind::Primary {
+    let stroke = if matches!(kind, ButtonKind::Primary | ButtonKind::DangerSolid) {
         egui::Stroke::NONE
     } else {
         egui::Stroke::new(1.0, border)

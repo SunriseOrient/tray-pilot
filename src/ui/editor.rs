@@ -24,37 +24,127 @@ const MODAL_HEIGHT: f32 = 430.0;
 pub fn show(ui: &mut egui::Ui) {
     let pal = theme::palette();
 
-    let full = ui.max_rect();
-    let margin = app::WINDOW_MARGIN;
-    let panel = egui::Rect::from_min_max(
-        full.min + egui::vec2(margin, margin),
-        full.max - egui::vec2(margin, margin),
+    // 原生窗口：客户区直接铺主题底色，标题栏与圆角由系统绘制。
+    let panel = ui.max_rect();
+    ui.painter().rect(
+        panel,
+        egui::CornerRadius::ZERO,
+        pal.bg,
+        egui::Stroke::NONE,
+        egui::StrokeKind::Inside,
     );
 
-    let frame = egui::Frame::new()
-        .fill(pal.bg)
-        .stroke(egui::Stroke::new(1.0, pal.border_strong))
-        .corner_radius(egui::CornerRadius::from(18u8));
-    ui.painter().add(frame.paint(panel));
+    // 系统标题栏的关闭按钮
+    if ui.ctx().input(|i| i.viewport().close_requested()) {
+        app::close_editor();
+        return;
+    }
 
-    let draft_active = app::shared().draft.is_some();
+    let (draft_active, confirm_delete) = {
+        let sh = app::shared();
+        (sh.draft.is_some(), sh.confirm_delete.clone())
+    };
     let content = panel.shrink(app::PANEL_PADDING);
 
     ui.scope_builder(egui::UiBuilder::new().max_rect(content), |ui| {
         if draft_active {
             // 压暗背景，突出弹窗。
-            ui.painter().rect(
-                panel,
-                egui::CornerRadius::from(18u8),
-                egui::Color32::from_black_alpha(110),
-                egui::Stroke::NONE,
-                egui::StrokeKind::Inside,
-            );
+            dim_background(ui, panel);
             show_modal(ui, panel);
         } else {
             show_content(ui, panel);
+            if confirm_delete.is_some() {
+                dim_background(ui, panel);
+                show_delete_confirm(ui, panel);
+            }
         }
     });
+}
+
+/// 把整个面板压暗，突出上层的模态框。
+fn dim_background(ui: &egui::Ui, panel: egui::Rect) {
+    ui.painter().rect(
+        panel,
+        egui::CornerRadius::ZERO,
+        egui::Color32::from_black_alpha(110),
+        egui::Stroke::NONE,
+        egui::StrokeKind::Inside,
+    );
+}
+
+/// 删除确认框。
+fn show_delete_confirm(ui: &mut egui::Ui, panel: egui::Rect) {
+    let Some(id) = app::shared().confirm_delete.clone() else {
+        return;
+    };
+    let name = {
+        let sh = app::shared();
+        sh.config
+            .actions
+            .iter()
+            .find(|a| a.id == id)
+            .map(|a| a.name.clone())
+            .unwrap_or_default()
+    };
+    let pal = theme::palette();
+
+    let rect = egui::Rect::from_center_size(panel.center(), egui::vec2(380.0, 152.0));
+    let frame = egui::Frame::new()
+        .fill(pal.bg)
+        .stroke(egui::Stroke::new(1.0, pal.border_strong))
+        .corner_radius(egui::CornerRadius::from(12u8));
+    ui.painter().add(frame.paint(rect));
+
+    let inner = inset(rect, 22.0, 20.0);
+    ui.scope_builder(egui::UiBuilder::new().max_rect(inner), |ui| {
+        ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
+
+        ui.label(
+            egui::RichText::new("删除动作")
+                .size(15.5)
+                .strong()
+                .color(pal.text),
+        );
+        ui.add_space(10.0);
+        ui.add(
+            egui::Label::new(
+                egui::RichText::new(format!("确定要删除「{name}」吗？"))
+                    .size(13.0)
+                    .color(pal.text),
+            )
+            .wrap(),
+        );
+        ui.add_space(4.0);
+        ui.label(
+            egui::RichText::new("该操作无法撤销。")
+                .size(12.0)
+                .color(pal.text_dim),
+        );
+
+        // 按钮固定在对话框底部，避免宽度自适应时上下留白不均。
+        let row = egui::Rect::from_min_max(
+            egui::pos2(inner.left(), inner.bottom() - 32.0),
+            inner.max,
+        );
+        ui.scope_builder(egui::UiBuilder::new().max_rect(row), |ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if flat_button(ui, "删除", egui::vec2(84.0, 32.0), ButtonKind::DangerSolid)
+                    .clicked()
+                {
+                    app::delete_action(&id);
+                    app::toast("已删除".to_owned(), false);
+                }
+                if flat_button(ui, "取消", egui::vec2(84.0, 32.0), ButtonKind::Ghost).clicked() {
+                    app::shared().confirm_delete = None;
+                }
+            });
+        });
+    });
+
+    // Esc 取消
+    if ui.ctx().input(|i| i.key_pressed(egui::Key::Escape)) {
+        app::shared().confirm_delete = None;
+    }
 }
 
 /// 面板主体。
@@ -68,33 +158,15 @@ fn show_content(ui: &mut egui::Ui, panel: egui::Rect) {
         (sh.config.actions.len(), sh.config.elevate)
     };
 
-    // 标题栏
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing = egui::vec2(10.0, 0.0);
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing = egui::vec2(2.0, 0.0);
-            ui.label(
-                egui::RichText::new("常用动作管理")
-                    .size(17.0)
-                    .strong()
-                    .color(pal.text),
-            );
-            ui.label(
-                egui::RichText::new(format!("共 {count} 个动作"))
-                    .size(11.5)
-                    .color(pal.text_dim),
-            );
-        });
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if close_button(ui).clicked() {
-                app::close_editor();
-            }
-        });
-    });
+    ui.label(
+        egui::RichText::new(format!("共 {count} 个动作"))
+            .size(12.0)
+            .color(pal.text_dim),
+    );
 
-    ui.add_space(14.0);
+    ui.add_space(10.0);
     divider(ui, width);
-    ui.add_space(14.0);
+    ui.add_space(12.0);
 
     // 动作列表
     let footer_height = 46.0;
@@ -223,18 +295,8 @@ fn card(ui: &mut egui::Ui, action: &Action) {
                 .color(pal.text),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let armed = app::shared().delete_armed.as_deref() == Some(action.id.as_str());
-            let (label, kind) = if armed {
-                ("确认删除", ButtonKind::Danger)
-            } else {
-                ("删除", ButtonKind::Ghost)
-            };
-            if flat_button(ui, label, egui::vec2(68.0, 26.0), kind).clicked() {
-                if armed {
-                    app::delete_action(&action.id);
-                } else {
-                    app::shared().delete_armed = Some(action.id.clone());
-                }
+            if flat_button(ui, "删除", egui::vec2(68.0, 26.0), ButtonKind::Ghost).clicked() {
+                app::shared().confirm_delete = Some(action.id.clone());
             }
             if flat_button(ui, "编辑", egui::vec2(56.0, 26.0), ButtonKind::Ghost).clicked() {
                 app::shared().draft = Some(Draft {
@@ -278,7 +340,7 @@ fn show_modal(ui: &mut egui::Ui, panel: egui::Rect) {
     let frame = egui::Frame::new()
         .fill(pal.bg)
         .stroke(egui::Stroke::new(1.0, pal.border_strong))
-        .corner_radius(egui::CornerRadius::from(16u8));
+        .corner_radius(egui::CornerRadius::from(12u8));
     ui.painter().add(frame.paint(rect));
 
     let Some(mut draft) = app::shared().draft.take() else {

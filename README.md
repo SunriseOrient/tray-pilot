@@ -12,10 +12,26 @@ Windows 托盘常用动作工具。
 - **托盘弹出菜单**：点击或右键托盘图标即可呼出，动作列表 + 「编辑」「退出」，
   样式参考 Windows 原生右键菜单（单行条目、组间分隔线、悬停整行高亮），
   动作说明显示在悬停提示中。
-- **居中编辑面板**：新建 / 编辑 / 删除动作，可整体开关「以管理员身份运行」。
+- **居中编辑面板**：原生窗口 + 系统标题栏，新建 / 编辑 / 删除动作，
+  删除前会弹出确认框；可整体开关「以管理员身份运行」。
 - **管理员执行**：指令交给 Windows PowerShell（若已安装 PowerShell 7 则优先使用 `pwsh`），
   通过 `runas` 动词触发 UAC 提权，控制台窗口隐藏，标准输出与错误输出写入日志文件。
-- **现代化界面**：圆角卡片、柔和阴影、系统中英文自动切换（跟随 Windows 的浅色 / 深色设置）。
+- **现代化界面**：跟随 Windows 的浅色 / 深色设置自动切换。
+
+## 图标
+
+图形取自 `pilot-Fill.svg`（P 形定位针 + 四角星镂空），构建前离线光栅化为原始
+RGBA 数据内嵌（`assets/*.raw`），运行时不需要 SVG 解析器或 PNG 解码器。
+
+颜色按用途区分：
+
+| 用途 | 颜色 |
+| --- | --- |
+| 托盘（深色任务栏） | 白色图形 |
+| 托盘（浅色任务栏） | 近黑 `#1C1C1E` |
+| 窗口 / 任务栏图标 | 靛蓝 → 紫罗兰渐变底 `#6D74F5 → #8B5CF6` + 白色图形 |
+
+系统主题切换时托盘图标会自动换成对应配色。
 
 ## 使用
 
@@ -76,17 +92,18 @@ cargo clippy               # 静态检查
 TRAYPILOT_PREVIEW=popup  cargo run    # 预览托盘弹出菜单
 TRAYPILOT_PREVIEW=editor cargo run    # 预览编辑面板
 TRAYPILOT_PREVIEW=modal  cargo run    # 预览新建 / 编辑动作弹窗
+TRAYPILOT_PREVIEW=confirm cargo run   # 预览删除确认框
 ```
 
-主题默认跟随系统，可用 `TRAYPPILOT_THEME=light|dark` 强制指定。
+主题默认跟随系统，可用 `TRAYPILOT_THEME=light|dark` 强制指定。
 
 ## 技术栈
 
 Rust · [egui](https://github.com/emilk/egui) 0.37 · [eframe](https://github.com/emilk/egui/tree/master/crates/eframe) ·
 [tray-icon](https://github.com/tafia/tray-icon) · [windows](https://github.com/microsoft/windows-rs)
 
-界面使用 egui 的多视口（viewport）能力实现，弹出菜单与编辑面板都是独立的原生窗口，
-支持圆角、阴影与按系统 DPI 缩放。
+弹出菜单使用 egui 多视口实现的无边框透明窗口（原生右键菜单外观），
+编辑面板使用带系统标题栏的原生窗口，两者都按系统 DPI 缩放。
 
 ## 许可
 

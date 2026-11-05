@@ -78,9 +78,9 @@ fn dark_palette() -> Palette {
     }
 }
 
-/// 主题偏好：默认跟随系统，可用环境变量 `TRAYPPILOT_THEME=light|dark` 强制。
+/// 主题偏好：默认跟随系统，可用环境变量 `TRAYPILOT_THEME=light|dark` 强制。
 pub fn theme_preference() -> egui::ThemePreference {
-    match std::env::var("TRAYPPILOT_THEME").as_deref() {
+    match std::env::var("TRAYPILOT_THEME").as_deref() {
         Ok("light") => egui::ThemePreference::Light,
         Ok("dark") => egui::ThemePreference::Dark,
         _ => egui::ThemePreference::System,
@@ -93,6 +93,42 @@ fn is_dark(ctx: &egui::Context) -> bool {
         egui::ThemePreference::Dark => true,
         egui::ThemePreference::Light => false,
         egui::ThemePreference::System => matches!(ctx.system_theme(), Some(egui::Theme::Dark)),
+    }
+}
+
+/// 系统当前是否为深色模式（不依赖 egui 上下文，用于启动时创建托盘图标）。
+pub fn system_is_dark() -> bool {
+    matches!(theme_preference(), egui::ThemePreference::Dark)
+        || (matches!(theme_preference(), egui::ThemePreference::System) && registry_prefers_dark())
+}
+
+/// 读取注册表里的系统应用主题设置。
+fn registry_prefers_dark() -> bool {
+    use windows::core::w;
+    use windows::Win32::System::Registry::{
+        RegCloseKey, RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD,
+    };
+
+    unsafe {
+        let mut value: u32 = 1;
+        let mut size = std::mem::size_of::<u32>() as u32;
+        let path = windows::core::HSTRING::from(
+            r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+        );
+        let status = RegGetValueW(
+            HKEY_CURRENT_USER,
+            &path,
+            w!("AppsUseLightTheme"),
+            RRF_RT_REG_DWORD,
+            None,
+            Some((&mut value as *mut u32).cast()),
+            Some(&mut size),
+        );
+        let _ = RegCloseKey(HKEY_CURRENT_USER);
+        if status.is_err() {
+            return false;
+        }
+        value == 0
     }
 }
 

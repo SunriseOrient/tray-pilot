@@ -19,6 +19,16 @@ use std::sync::{Arc, OnceLock};
 use eframe::egui;
 use tray_icon::{TrayIconBuilder, TrayIconEvent};
 
+/// 生成托盘图标。`dark_taskbar` 为真时使用白色图形。
+pub fn build_tray_icon(dark_taskbar: bool) -> tray_icon::Icon {
+    tray_icon::Icon::from_rgba(
+        icon::tray_icon_rgba(dark_taskbar),
+        icon::SIZE,
+        icon::SIZE,
+    )
+    .expect("托盘图标数据无效")
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 载入配置
     {
@@ -26,9 +36,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         shared.config = config::load();
     }
 
-    // 托盘图标（程序化生成，不依赖图片资源）
-    let rgba = icon::tray_icon_rgba();
-    let tray_icon = tray_icon::Icon::from_rgba(rgba, icon::SIZE, icon::SIZE)?;
+    // 托盘图标：按当前系统主题选择深色 / 浅色任务栏对应的那一套。
+    let tray_icon = build_tray_icon(theme::system_is_dark());
     let tray = TrayIconBuilder::new()
         .with_icon(tray_icon)
         .with_tooltip("TrayPilot · 常用动作")
@@ -87,7 +96,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let _ = ctx_slot.set(cc.egui_ctx.clone());
             theme::install_fonts(&cc.egui_ctx);
             cc.egui_ctx.set_theme(theme::theme_preference());
-            Ok(Box::new(app::TrayPilotApp::new(tray)))
+            Ok(Box::new(app::TrayPilotApp::new(tray, theme::system_is_dark())))
         }),
     )?;
     Ok(())

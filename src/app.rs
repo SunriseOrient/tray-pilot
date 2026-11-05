@@ -1,6 +1,6 @@
 //! 应用状态机：托盘事件 → 弹出菜单 / 编辑面板 → 执行动作。
 
-use std::sync::{LazyLock, Mutex, MutexGuard};
+use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use eframe::egui;
@@ -22,6 +22,18 @@ pub const PANEL_PADDING: f32 = 20.0;
 /// 保持为 0：窗口与面板完全重合，否则四周会留下一圈透明区域——
 /// 它虽然看不见，却会挡住下面程序的点击，看起来像凭空多出一块窗体。
 pub const WINDOW_MARGIN: f32 = 0.0;
+
+/// 应用图标（同时用于窗口标题栏与任务栏）。
+pub fn app_icon() -> Arc<egui::IconData> {
+    static ICON: LazyLock<Arc<egui::IconData>> = LazyLock::new(|| {
+        Arc::new(egui::IconData {
+            rgba: crate::icon::app_icon_rgba(),
+            width: crate::icon::APP_ICON_SIZE,
+            height: crate::icon::APP_ICON_SIZE,
+        })
+    });
+    Arc::clone(&ICON)
+}
 
 /// 弹出菜单窗口标题。
 pub const POPUP_TITLE: &str = "TrayPilot · 常用动作";
@@ -88,8 +100,8 @@ pub struct Shared {
     pub editor: Option<Editor>,
     pub draft: Option<Draft>,
     pub toast: Option<Toast>,
-    /// 已经点过一次「删除」的动作 ID，需要再点一次才真正删除。
-    pub delete_armed: Option<String>,
+    /// 待确认删除的动作 ID（弹出确认框）。
+    pub confirm_delete: Option<String>,
     pub quit: bool,
     pending: Vec<TrayCommand>,
 }
@@ -101,7 +113,7 @@ static SHARED: LazyLock<Mutex<Shared>> = LazyLock::new(|| {
         editor: None,
         draft: None,
         toast: None,
-        delete_armed: None,
+        confirm_delete: None,
         quit: false,
         pending: Vec::new(),
     })
@@ -129,16 +141,30 @@ pub fn push_tray_command(cmd: TrayCommand) {
 /// 主应用。
 pub struct TrayPilotApp {
     /// 必须一直存活，否则托盘图标会消失。
-    _tray: Box<TrayIcon>,
+    tray: Box<TrayIcon>,
     /// 是否已经处理过启动预览。
     previewed: bool,
+    /// 当前托盘图标是为深色任务栏准备的吗？系统主题变化时用它判断要不要重绘。
+    tray_for_dark: bool,
 }
 
 impl TrayPilotApp {
-    pub fn new(tray: TrayIcon) -> Self {
+    pub fn new(tray: TrayIcon, tray_for_dark: bool) -> Self {
         Self {
-            _tray: Box::new(tray),
+            tray: Box::new(tray),
             previewed: false,
+            tray_for_dark,
+        }
+    }
+
+    /// 系统主题切换时同步更新托盘图标（深色任务栏配白色图形）。
+    fn sync_tray_icon(&mut self, ctx: &egui::Context) {
+        let dark = matches!(ctx.system_theme(), Some(egui::Theme::Dark));
+        if dark == self.tray_for_dark {
+            return;
+        }
+        if self.tray.set_icon(Some(crate::build_tray_icon(dark))).is_ok() {
+            self.tray_for_dark = dark;
         }
     }
 
@@ -169,6 +195,11 @@ impl TrayPilotApp {
                 });
             }
             "editor" => open_editor(ctx),
+            "confirm" => {
+                open_editor(ctx);
+                let first = shared().config.actions.first().map(|a| a.id.clone());
+                shared().confirm_delete = first;
+            }
             "modal" => {
                 open_editor(ctx);
                 shared().draft = Some(Draft {
@@ -259,11 +290,15 @@ impl TrayPilotApp {
         }
 
         if let Some((pos, size, frames)) = editor {
+            // 编辑面板使用原生窗口：系统标题栏（图标 / 最小化 / 最大化 / 关闭）
+            // 与 Windows 11 的原生圆角都由 DWM 负责。
             let builder = egui::ViewportBuilder::default()
                 .with_title(EDITOR_TITLE)
-                .with_decorations(false)
-                .with_transparent(true)
-                .with_resizable(false)
+                .with_icon(app_icon())
+                .with_decorations(true)
+                .with_transparent(false)
+                .with_resizable(true)
+                .with_min_inner_size(egui::vec2(460.0, 320.0))
                 .with_inner_size(size)
                 .with_position(pos);
             ctx.show_viewport_deferred(editor_id(), builder, |ui, _| crate::ui::editor::show(ui));
@@ -277,6 +312,7 @@ impl TrayPilotApp {
 impl eframe::App for TrayPilotApp {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         theme::apply(ctx);
+        self.sync_tray_icon(ctx);
         self.maybe_preview(ctx);
         self.handle_commands(ctx);
     }
@@ -469,7 +505,7 @@ pub fn delete_action(id: &str) {
     let config = {
         let mut sh = shared();
         sh.config.actions.retain(|a| a.id != id);
-        sh.delete_armed = None;
+        sh.confirm_delete = None;
         sh.config.clone()
     };
     if let Err(err) = crate::config::save(&config) {
