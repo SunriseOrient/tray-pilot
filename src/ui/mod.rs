@@ -129,21 +129,9 @@ pub fn close_button(ui: &mut egui::Ui) -> egui::Response {
 /// 添加的，因此在同一层里盖在上面，命中测试优先命中它，背景就收不到点击了。
 /// 弹窗自身的控件再在它之后添加，所以照常可用。
 ///
-/// 返回是否点了 `sheet` 以外的区域（可以用来实现「点外部关闭」）。
-pub fn modal_blocker(
-    ui: &mut egui::Ui,
-    panel: egui::Rect,
-    sheet: egui::Rect,
-    id: &str,
-) -> bool {
-    let response = ui.interact(panel, egui::Id::unique(id), egui::Sense::click_and_drag());
-    if !response.clicked() {
-        return false;
-    }
-    // 只有点在弹窗外面才算「外部点击」；点弹窗里的空白处不算。
-    ui.ctx()
-        .input(|i| i.pointer.interact_pos())
-        .is_some_and(|p| !sheet.contains(p))
+/// 遮罩只拦截输入，不关闭弹窗——关窗走标题栏的 × 或 Esc，避免误触。
+pub fn modal_blocker(ui: &mut egui::Ui, panel: egui::Rect, id: &str) {
+    let _ = ui.interact(panel, egui::Id::unique(id), egui::Sense::click_and_drag());
 }
 
 /// 细分隔线。`inset` 是左侧留白，用来做列表的分组缩进。

@@ -26,7 +26,7 @@ const ROW_HEIGHT: f32 = 64.0;
 /// 设置行高。
 const SETTING_ROW_HEIGHT: f32 = 48.0;
 /// 新建 / 编辑弹窗高度。
-const MODAL_HEIGHT: f32 = 420.0;
+const MODAL_HEIGHT: f32 = 388.0;
 /// 新建 / 编辑弹窗尺寸。
 const MODAL_SIZE: egui::Vec2 = egui::vec2(440.0, MODAL_HEIGHT);
 /// 设置弹窗尺寸。
@@ -66,32 +66,23 @@ pub fn show(ui: &mut egui::Ui) {
     let content = panel.shrink(app::PANEL_PADDING);
 
     ui.scope_builder(egui::UiBuilder::new().max_rect(content), |ui| {
+        // 三种弹窗共用同一套结构：内容照常画在后面（被遮罩压暗）、
+        // 遮罩拦截输入、弹窗盖在最上面。这样无论打开哪个弹窗，
+        // 背景看起来都是一致的。
+        show_content(ui, panel);
+
         if draft_active {
             dim_background(ui, panel);
-            let sheet = sheet_rect(panel, MODAL_SIZE);
-            // 表单里有用户输入，点外面只拦截、不关闭，避免误丢内容。
-            modal_blocker(ui, panel, sheet, "tray-pilot::modal-block::draft");
-            show_modal(ui, sheet);
-        } else {
-            show_content(ui, panel);
-            if settings_open {
-                dim_background(ui, panel);
-                let sheet = sheet_rect(panel, SETTINGS_SIZE);
-                let outside = modal_blocker(ui, panel, sheet, "tray-pilot::modal-block::settings");
-                show_settings(ui, sheet);
-                // 点弹窗外面就关掉（设置即时生效，没有「未保存」的概念）。
-                if outside {
-                    app::shared().settings_open = false;
-                }
-            } else if confirm_delete.is_some() {
-                dim_background(ui, panel);
-                let sheet = sheet_rect(panel, CONFIRM_SIZE);
-                let outside = modal_blocker(ui, panel, sheet, "tray-pilot::modal-block::confirm");
-                show_delete_confirm(ui, sheet);
-                if outside {
-                    app::shared().confirm_delete = None;
-                }
-            }
+            modal_blocker(ui, panel, "tray-pilot::modal-block::draft");
+            show_modal(ui, sheet_rect(panel, MODAL_SIZE));
+        } else if settings_open {
+            dim_background(ui, panel);
+            modal_blocker(ui, panel, "tray-pilot::modal-block::settings");
+            show_settings(ui, sheet_rect(panel, SETTINGS_SIZE));
+        } else if confirm_delete.is_some() {
+            dim_background(ui, panel);
+            modal_blocker(ui, panel, "tray-pilot::modal-block::confirm");
+            show_delete_confirm(ui, sheet_rect(panel, CONFIRM_SIZE));
         }
     });
 }
