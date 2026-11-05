@@ -146,7 +146,7 @@ fn show_content(ui: &mut egui::Ui, panel: egui::Rect) {
         egui::Align2::LEFT_CENTER,
         format!("{count} 个动作"),
         egui::FontId::proportional(12.0),
-        pal.text_faint,
+        pal.text_dim,
     );
 
     let mut actions_ui = ui.new_child(
@@ -187,7 +187,7 @@ fn show_content(ui: &mut egui::Ui, panel: egui::Rect) {
                     ui.label(
                         egui::RichText::new("还没有动作")
                             .size(13.0)
-                            .color(pal.text_faint),
+                            .color(pal.text_dim),
                     );
                     ui.add_space(4.0);
                     ui.label(
@@ -256,8 +256,8 @@ fn action_row(ui: &mut egui::Ui, width: f32, action: &Action) {
         text.add(
             egui::Label::new(
                 egui::RichText::new(&action.description)
-                    .size(11.5)
-                    .color(pal.text_faint),
+                    .size(12.0)
+                    .color(pal.text_dim),
             )
             .truncate(),
         );
@@ -437,7 +437,7 @@ fn setting_switch(ui: &mut egui::Ui, row: egui::Rect, title: &str, hint: &str, v
             egui::Align2::LEFT_CENTER,
             hint,
             egui::FontId::proportional(11.5),
-            pal.text_faint,
+            pal.text_dim,
         );
     }
 
@@ -478,8 +478,8 @@ fn show_delete_confirm(ui: &mut egui::Ui, panel: egui::Rect) {
             ui.add(
                 egui::Label::new(
                     egui::RichText::new(format!("「{name}」将被永久删除"))
-                        .size(12.0)
-                        .color(pal.text_faint),
+                        .size(12.5)
+                        .color(pal.text_dim),
                 )
                 .wrap(),
             );

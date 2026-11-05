@@ -66,9 +66,9 @@ fn light_palette() -> Palette {
         bg_soft: egui::Color32::from_rgb(244, 244, 245),
         border: egui::Color32::from_rgb(236, 236, 238),
         border_strong: egui::Color32::from_rgb(224, 224, 227),
-        text: egui::Color32::from_rgb(23, 23, 23),
-        text_dim: egui::Color32::from_rgb(138, 138, 142),
-        text_faint: egui::Color32::from_rgb(176, 176, 180),
+        text: egui::Color32::from_rgb(26, 26, 26),
+        text_dim: egui::Color32::from_rgb(97, 97, 102),
+        text_faint: egui::Color32::from_rgb(138, 138, 142),
         accent: egui::Color32::from_rgb(23, 23, 23),
         accent_hover: egui::Color32::from_rgb(56, 56, 56),
         on_accent: egui::Color32::WHITE,
@@ -89,8 +89,8 @@ fn dark_palette() -> Palette {
         border: egui::Color32::from_rgb(44, 44, 46),
         border_strong: egui::Color32::from_rgb(58, 58, 60),
         text: egui::Color32::from_rgb(237, 237, 237),
-        text_dim: egui::Color32::from_rgb(138, 138, 142),
-        text_faint: egui::Color32::from_rgb(92, 92, 96),
+        text_dim: egui::Color32::from_rgb(168, 168, 174),
+        text_faint: egui::Color32::from_rgb(122, 122, 128),
         accent: egui::Color32::from_rgb(237, 237, 237),
         accent_hover: egui::Color32::from_rgb(255, 255, 255),
         on_accent: egui::Color32::from_rgb(22, 22, 23),
@@ -231,35 +231,57 @@ pub fn apply(ctx: &egui::Context) {
     });
 }
 
-/// 安装字体：拉丁字体 + 中文字体回退 + 等宽字体。
+/// 安装字体：直接使用 Windows 的系统 UI 字体。
 ///
-/// egui 自带字体不含中文字形，因此必须从系统字体目录加载中文字体。
+/// - 拉丁：Segoe UI Variable（Windows 11 的系统界面字体），回退 Segoe UI
+/// - 中文：微软雅黑（Windows 界面中文的默认字体），回退等线 / 黑体
+/// - 等宽：Consolas
+///
+/// egui 自带字体不含中文字形，必须从系统字体目录加载。
 pub fn install_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
 
-    if let Some(data) = load_font(&["segoeui.ttf", "tahoma.ttf", "arial.ttf"]) {
+    if let Some((data, index)) = load_font(&[
+        "SegUIVar.ttf",
+        "segoeui.ttf",
+        "seguisb.ttf",
+        "tahoma.ttf",
+    ]) {
         fonts
             .font_data
-            .insert("latin".to_owned(), std::sync::Arc::new(data));
+            .insert("latin".to_owned(), std::sync::Arc::new(with_index(data, index)));
         insert_family(&mut fonts, egui::FontFamily::Proportional, "latin", 0);
     }
 
-    if let Some(data) = load_font(&["Deng.ttf", "simhei.ttf", "msyh.ttc", "simsun.ttc"]) {
+    // 微软雅黑是 .ttc 字体集合，index 0 即「微软雅黑」常规体。
+    if let Some((data, index)) = load_font(&[
+        "msyh.ttc",
+        "msyh.ttf",
+        "Deng.ttf",
+        "simhei.ttf",
+        "simsun.ttc",
+    ]) {
         fonts
             .font_data
-            .insert("cjk".to_owned(), std::sync::Arc::new(data));
+            .insert("cjk".to_owned(), std::sync::Arc::new(with_index(data, index)));
         insert_family(&mut fonts, egui::FontFamily::Proportional, "cjk", 1);
         insert_family(&mut fonts, egui::FontFamily::Monospace, "cjk", 1);
     }
 
-    if let Some(data) = load_font(&["consola.ttf", "cour.ttf"]) {
+    if let Some((data, index)) = load_font(&["consola.ttf", "cour.ttf"]) {
         fonts
             .font_data
-            .insert("mono".to_owned(), std::sync::Arc::new(data));
+            .insert("mono".to_owned(), std::sync::Arc::new(with_index(data, index)));
         insert_family(&mut fonts, egui::FontFamily::Monospace, "mono", 0);
     }
 
     ctx.set_fonts(fonts);
+}
+
+fn with_index(data: egui::FontData, index: u32) -> egui::FontData {
+    let mut data = data;
+    data.index = index;
+    data
 }
 
 /// 把字体插入到字体族列表的指定位置。
@@ -278,7 +300,10 @@ fn insert_family(
 }
 
 /// 从系统字体目录加载第一个可用的字体文件。
-fn load_font(candidates: &[&str]) -> Option<egui::FontData> {
+///
+/// 返回字体数据和所用的字面下标——`.ttc` 是字体集合，`ab_glyph` 需要显式指定
+/// 用第几个字面，否则解析会失败。
+fn load_font(candidates: &[&str]) -> Option<(egui::FontData, u32)> {
     let dir = std::env::var_os("WINDIR")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| std::path::PathBuf::from(r"C:\Windows"));
@@ -288,9 +313,11 @@ fn load_font(candidates: &[&str]) -> Option<egui::FontData> {
         let Ok(bytes) = std::fs::read(&path) else {
             continue;
         };
-        // TTC 集合无法被解析，这里提前校验，避免装入坏字体。
-        if ab_glyph::FontVec::try_from_vec(bytes.clone()).is_ok() {
-            return Some(egui::FontData::from_owned(bytes));
+        // 先用 ab_glyph 校验（顺带确认字面可用），再交给 egui。
+        for index in 0..8u32 {
+            if ab_glyph::FontVec::try_from_vec_and_index(bytes.clone(), index).is_ok() {
+                return Some((egui::FontData::from_owned(bytes), index));
+            }
         }
     }
     None

@@ -68,7 +68,7 @@ pub fn flat_button(
         ),
         ButtonKind::DangerPlain => (
             if hot { pal.danger_soft } else { egui::Color32::TRANSPARENT },
-            if hot { pal.danger } else { pal.text_faint },
+            if hot { pal.danger } else { pal.text_dim },
         ),
         ButtonKind::DangerSolid => (
             if hot {
@@ -231,7 +231,7 @@ pub fn segmented(ui: &mut egui::Ui, labels: &[&str], selected: usize) -> Option<
 /// 带标签的输入框。外框是一条淡底 + 无描边，聚焦时才出现描边。
 pub fn field(ui: &mut egui::Ui, label: &str, text: &mut String, multiline: bool) {
     let pal = theme::palette();
-    ui.label(egui::RichText::new(label).size(11.5).color(pal.text_faint));
+    ui.label(egui::RichText::new(label).size(12.0).color(pal.text_dim));
     ui.add_space(5.0);
 
     let frame = egui::Frame::new()
