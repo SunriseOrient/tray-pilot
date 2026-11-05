@@ -15,6 +15,8 @@ pub struct Palette {
     pub bg_soft: Color32Alias,
     /// 分隔线 / 描边。
     pub border: Color32Alias,
+    /// 窗口外框描边（没有投影时用来界定边界）。
+    pub border_strong: Color32Alias,
     /// 主要文字。
     pub text: Color32Alias,
     /// 次要文字。
@@ -29,8 +31,6 @@ pub struct Palette {
     pub danger: Color32Alias,
     /// 危险操作（淡染）。
     pub danger_soft: Color32Alias,
-    /// 阴影颜色。
-    pub shadow: Color32Alias,
 }
 
 type Color32Alias = egui::Color32;
@@ -51,6 +51,7 @@ fn light_palette() -> Palette {
         bg: egui::Color32::from_rgb(255, 255, 255),
         bg_soft: egui::Color32::from_rgb(244, 244, 248),
         border: egui::Color32::from_rgb(229, 229, 236),
+        border_strong: egui::Color32::from_rgb(214, 214, 224),
         text: egui::Color32::from_rgb(22, 22, 27),
         text_dim: egui::Color32::from_rgb(113, 113, 126),
         accent: egui::Color32::from_rgb(99, 102, 241),
@@ -58,7 +59,6 @@ fn light_palette() -> Palette {
         accent_soft: egui::Color32::from_rgba_unmultiplied(99, 102, 241, 28),
         danger: egui::Color32::from_rgb(215, 55, 72),
         danger_soft: egui::Color32::from_rgba_unmultiplied(215, 55, 72, 26),
-        shadow: egui::Color32::from_rgba_unmultiplied(18, 20, 45, 42),
     }
 }
 
@@ -67,6 +67,7 @@ fn dark_palette() -> Palette {
         bg: egui::Color32::from_rgb(27, 27, 33),
         bg_soft: egui::Color32::from_rgb(38, 38, 46),
         border: egui::Color32::from_rgb(54, 54, 65),
+        border_strong: egui::Color32::from_rgb(78, 78, 92),
         text: egui::Color32::from_rgb(237, 237, 242),
         text_dim: egui::Color32::from_rgb(152, 152, 166),
         accent: egui::Color32::from_rgb(139, 139, 255),
@@ -74,18 +75,6 @@ fn dark_palette() -> Palette {
         accent_soft: egui::Color32::from_rgba_unmultiplied(139, 139, 255, 40),
         danger: egui::Color32::from_rgb(255, 107, 107),
         danger_soft: egui::Color32::from_rgba_unmultiplied(255, 107, 107, 38),
-        shadow: egui::Color32::from_rgba_unmultiplied(0, 0, 0, 150),
-    }
-}
-
-/// 面板阴影。
-pub fn panel_shadow() -> egui::Shadow {
-    let pal = palette();
-    egui::Shadow {
-        offset: [0, 10],
-        blur: 30,
-        spread: 0,
-        color: pal.shadow,
     }
 }
 
@@ -95,17 +84,6 @@ pub fn theme_preference() -> egui::ThemePreference {
         Ok("light") => egui::ThemePreference::Light,
         Ok("dark") => egui::ThemePreference::Dark,
         _ => egui::ThemePreference::System,
-    }
-}
-
-/// 菜单阴影（比面板更轻，避免四周出现厚重的透明边框感）。
-pub fn menu_shadow() -> egui::Shadow {
-    let alpha = if DARK.load(Ordering::Relaxed) { 150 } else { 38 };
-    egui::Shadow {
-        offset: [0, 6],
-        blur: 20,
-        spread: 0,
-        color: egui::Color32::from_rgba_unmultiplied(0, 0, 0, alpha),
     }
 }
 
@@ -142,7 +120,7 @@ pub fn apply(ctx: &egui::Context) {
     visuals.selection.stroke = egui::Stroke::new(1.0, pal.accent);
     visuals.window_corner_radius = egui::CornerRadius::from(16u8);
     visuals.window_stroke = egui::Stroke::new(1.0, pal.border);
-    visuals.window_shadow = panel_shadow();
+    visuals.window_shadow = egui::Shadow::NONE;
 
     let widget = |fill: egui::Color32, stroke: egui::Color32, fg: egui::Color32| egui::style::WidgetVisuals {
         bg_fill: fill,

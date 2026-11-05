@@ -18,7 +18,10 @@ pub const MENU_PADDING: f32 = 6.0;
 /// 面板内边距（点）。
 pub const PANEL_PADDING: f32 = 20.0;
 /// 窗口四周留给阴影的空白（点）。
-pub const WINDOW_MARGIN: f32 = 10.0;
+///
+/// 保持为 0：窗口与面板完全重合，否则四周会留下一圈透明区域——
+/// 它虽然看不见，却会挡住下面程序的点击，看起来像凭空多出一块窗体。
+pub const WINDOW_MARGIN: f32 = 0.0;
 
 /// 弹出菜单窗口标题。
 pub const POPUP_TITLE: &str = "TrayPilot · 常用动作";

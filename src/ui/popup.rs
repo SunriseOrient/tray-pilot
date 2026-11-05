@@ -21,12 +21,11 @@ pub fn show(ui: &mut egui::Ui) {
         full.max - egui::vec2(margin, margin),
     );
 
-    // 面板：圆角 + 轻阴影，四周只留很窄的透明边。
+    // 面板：圆角 + 描边。窗口与面板同尺寸，四周没有多余的透明区域。
     let frame = egui::Frame::new()
         .fill(pal.bg)
-        .stroke(egui::Stroke::new(1.0, pal.border))
-        .corner_radius(egui::CornerRadius::from(10u8))
-        .shadow(theme::menu_shadow());
+        .stroke(egui::Stroke::new(1.0, pal.border_strong))
+        .corner_radius(egui::CornerRadius::from(10u8));
     ui.painter().add(frame.paint(panel));
 
     let content = panel.shrink(app::MENU_PADDING);

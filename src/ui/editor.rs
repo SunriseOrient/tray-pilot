@@ -33,9 +33,8 @@ pub fn show(ui: &mut egui::Ui) {
 
     let frame = egui::Frame::new()
         .fill(pal.bg)
-        .stroke(egui::Stroke::new(1.0, pal.border))
-        .corner_radius(egui::CornerRadius::from(18u8))
-        .shadow(theme::panel_shadow());
+        .stroke(egui::Stroke::new(1.0, pal.border_strong))
+        .corner_radius(egui::CornerRadius::from(18u8));
     ui.painter().add(frame.paint(panel));
 
     let draft_active = app::shared().draft.is_some();
@@ -278,9 +277,8 @@ fn show_modal(ui: &mut egui::Ui, panel: egui::Rect) {
     );
     let frame = egui::Frame::new()
         .fill(pal.bg)
-        .stroke(egui::Stroke::new(1.0, pal.border))
-        .corner_radius(egui::CornerRadius::from(16u8))
-        .shadow(theme::panel_shadow());
+        .stroke(egui::Stroke::new(1.0, pal.border_strong))
+        .corner_radius(egui::CornerRadius::from(16u8));
     ui.painter().add(frame.paint(rect));
 
     let Some(mut draft) = app::shared().draft.take() else {
