@@ -1,4 +1,5 @@
-//! 共用界面组件：按钮、分隔线、开关等。
+//! 共用界面组件，视觉参照 Apple 的 macOS / iOS 设计语言：
+//! 系统蓝强调色、圆角填充按钮、iOS 风格开关、分段选择器、分组卡片。
 
 pub mod editor;
 pub mod popup;
@@ -10,15 +11,36 @@ use crate::theme;
 /// 按钮风格。
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ButtonKind {
-    /// 主按钮，强调色实心。
+    /// 主按钮：系统蓝实心，白字。
     Primary,
-    /// 次要按钮，描边。
+    /// 次要按钮：灰色填充，正文色文字。
     Ghost,
-    /// 危险操作主按钮，实心危险色（用于删除确认）。
+    /// 纯文字按钮：蓝色文字，悬停时淡蓝底（用于行内的「编辑」）。
+    Plain,
+    /// 纯文字危险按钮：红色文字（用于行内的「删除」）。
+    DangerPlain,
+    /// 危险主按钮：红色实心，白字（用于删除确认）。
     DangerSolid,
 }
 
-/// 自绘的扁平圆角按钮，完全掌控外观。
+/// 圆角矩形（统一的 `rect` 调用，省得到处写 `StrokeKind`）。
+pub fn fill_rounded(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    radius: u8,
+    fill: egui::Color32,
+    stroke: egui::Stroke,
+) {
+    painter.rect(
+        rect,
+        egui::CornerRadius::from(radius),
+        fill,
+        stroke,
+        egui::StrokeKind::Inside,
+    );
+}
+
+/// 自绘的按钮。
 pub fn flat_button(
     ui: &mut egui::Ui,
     label: &str,
@@ -27,78 +49,48 @@ pub fn flat_button(
 ) -> egui::Response {
     let pal = theme::palette();
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+    let hovered = response.hovered();
+    let pressed = response.is_pointer_button_down_on();
 
-    let (mut bg, mut fg, border) = match kind {
-        ButtonKind::Primary => (pal.accent, egui::Color32::WHITE, pal.accent),
-        ButtonKind::Ghost => (egui::Color32::TRANSPARENT, pal.text_dim, pal.border),
-        ButtonKind::DangerSolid => (pal.danger, egui::Color32::WHITE, pal.danger),
+    let (bg, fg) = match kind {
+        ButtonKind::Primary => (
+            if pressed || hovered { pal.accent_hover } else { pal.accent },
+            egui::Color32::WHITE,
+        ),
+        ButtonKind::Ghost => (
+            if pressed || hovered {
+                pal.bg_soft.lerp_to_gamma(pal.text, 0.07)
+            } else {
+                pal.bg_soft
+            },
+            pal.text,
+        ),
+        ButtonKind::Plain => (
+            if hovered { pal.accent_soft } else { egui::Color32::TRANSPARENT },
+            pal.accent,
+        ),
+        ButtonKind::DangerPlain => (
+            if hovered { pal.danger_soft } else { egui::Color32::TRANSPARENT },
+            pal.danger,
+        ),
+        ButtonKind::DangerSolid => (
+            if pressed || hovered {
+                pal.danger.lerp_to_gamma(egui::Color32::BLACK, 0.12)
+            } else {
+                pal.danger
+            },
+            egui::Color32::WHITE,
+        ),
     };
 
-    if response.hovered() {
-        match kind {
-            ButtonKind::Primary => bg = pal.accent_hover,
-            ButtonKind::Ghost => {
-                bg = pal.bg_soft;
-                fg = pal.text;
-            }
-            ButtonKind::DangerSolid => {
-                bg = egui::Color32::from_rgb(232, 74, 92);
-            }
-        }
-    }
-
-    let stroke = if matches!(kind, ButtonKind::Primary | ButtonKind::DangerSolid) {
-        egui::Stroke::NONE
-    } else {
-        egui::Stroke::new(1.0, border)
-    };
-
-    ui.painter().rect(
-        rect,
-        egui::CornerRadius::from(8u8),
-        bg,
-        stroke,
-        egui::StrokeKind::Inside,
-    );
+    fill_rounded(ui.painter(), rect, 8, bg, egui::Stroke::NONE);
     ui.painter().text(
         rect.center(),
         egui::Align2::CENTER_CENTER,
         label,
-        egui::FontId::proportional(13.0),
+        egui::FontId::proportional(13.5),
         fg,
     );
-
-    response
-}
-
-/// 关闭按钮：一个手绘的叉号，避免依赖特殊字形。
-pub fn close_button(ui: &mut egui::Ui) -> egui::Response {
-    let pal = theme::palette();
-    let size = egui::vec2(28.0, 28.0);
-    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
-
-    if response.hovered() {
-        ui.painter().rect(
-            rect,
-            egui::CornerRadius::from(8u8),
-            pal.bg_soft,
-            egui::Stroke::NONE,
-            egui::StrokeKind::Inside,
-        );
-    }
-
-    let color = if response.hovered() {
-        pal.text
-    } else {
-        pal.text_dim
-    };
-    let stroke = egui::Stroke::new(1.6, color);
-    let c = rect.center();
-    let r = 4.5;
-    ui.painter()
-        .line_segment([c - egui::vec2(r, r), c + egui::vec2(r, r)], stroke);
-    ui.painter()
-        .line_segment([c + egui::vec2(r, -r), c + egui::vec2(-r, r)], stroke);
 
     response
 }
@@ -114,6 +106,31 @@ pub fn divider(ui: &mut egui::Ui, width: f32) {
     );
 }
 
+/// 分组卡片：白色（深色模式下为深灰）圆角底，细描边。
+/// 返回卡片矩形，调用方在里面自行排版每一行。
+pub fn group_card(ui: &mut egui::Ui, width: f32, height: f32) -> egui::Rect {
+    let pal = theme::palette();
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
+    fill_rounded(
+        ui.painter(),
+        rect,
+        12,
+        pal.surface,
+        egui::Stroke::new(1.0, pal.border),
+    );
+    rect
+}
+
+/// 卡片内两行之间的分隔线：左侧缩进 16，和 iOS 的列表一致。
+pub fn row_separator(ui: &egui::Ui, row: egui::Rect) {
+    let pal = theme::palette();
+    ui.painter().hline(
+        (row.left() + 16.0)..=row.right(),
+        row.bottom(),
+        egui::Stroke::new(1.0, pal.border),
+    );
+}
+
 /// 菜单里的分组分隔线（上下各留一点空白）。
 pub fn menu_separator(ui: &mut egui::Ui, width: f32) {
     ui.add_space(5.0);
@@ -121,13 +138,8 @@ pub fn menu_separator(ui: &mut egui::Ui, width: f32) {
     ui.add_space(5.0);
 }
 
-/// 原生菜单风格的条目：单行文字，悬停整行高亮。
-pub fn menu_item(
-    ui: &mut egui::Ui,
-    label: &str,
-    id: &str,
-    width: f32,
-) -> egui::Response {
+/// macOS 菜单风格的条目：单行文字，悬停时整行系统蓝高亮、文字变白。
+pub fn menu_item(ui: &mut egui::Ui, label: &str, id: &str, width: f32) -> egui::Response {
     let pal = theme::palette();
     let height = crate::app::MENU_ITEM_HEIGHT;
 
@@ -136,28 +148,15 @@ pub fn menu_item(
     let hovered = response.hovered();
 
     if hovered {
-        ui.painter().rect(
-            rect,
-            egui::CornerRadius::from(6u8),
-            pal.accent,
-            egui::Stroke::NONE,
-            egui::StrokeKind::Inside,
-        );
+        fill_rounded(ui.painter(), rect, 5, pal.accent, egui::Stroke::NONE);
     }
 
-    let color = if hovered {
-        egui::Color32::WHITE
-    } else {
-        pal.text
-    };
+    let color = if hovered { egui::Color32::WHITE } else { pal.text };
     let font = egui::FontId::proportional(13.5);
     let text = ellipsize(ui, label, font.clone(), width - 24.0);
     let galley = ui.painter().layout_no_wrap(text, font, color);
     ui.painter().galley(
-        egui::pos2(
-            rect.left() + 12.0,
-            rect.center().y - galley.size().y * 0.5,
-        ),
+        egui::pos2(rect.left() + 12.0, rect.center().y - galley.size().y * 0.5),
         galley,
         color,
     );
@@ -177,7 +176,8 @@ fn ellipsize(ui: &egui::Ui, text: &str, font: egui::FontId, max_width: f32) -> S
     while !chars.is_empty() {
         chars.pop();
         let candidate: String = chars.iter().collect();
-        let measured = painter.layout_no_wrap(candidate.clone(), font.clone(), egui::Color32::WHITE);
+        let measured =
+            painter.layout_no_wrap(candidate.clone(), font.clone(), egui::Color32::WHITE);
         if measured.size().x <= max_width - 12.0 {
             return format!("{candidate}…");
         }
@@ -185,52 +185,112 @@ fn ellipsize(ui: &egui::Ui, text: &str, font: egui::FontId, max_width: f32) -> S
     String::new()
 }
 
-/// 开关。
+/// iOS 风格开关：绿色轨道，白色圆形滑块带轻投影，切换时有过渡动画。
 pub fn switch(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
     let pal = theme::palette();
-    let size = egui::vec2(38.0, 22.0);
+    let size = egui::vec2(46.0, 28.0);
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
 
     if response.clicked() {
         *on = !*on;
     }
 
-    let track = if *on { pal.accent } else { pal.bg_soft };
-    ui.painter().rect(
-        rect,
-        egui::CornerRadius::from(11u8),
-        track,
-        egui::Stroke::new(1.0, if *on { pal.accent } else { pal.border }),
-        egui::StrokeKind::Inside,
-    );
+    // 0.0 = 关，1.0 = 开，中间值是过渡动画。
+    let t = ui.ctx().animate_bool_with_time(response.id, *on, 0.16);
 
-    let knob_x = if *on {
-        rect.right() - 11.0
-    } else {
-        rect.left() + 11.0
-    };
+    let track = pal.switch_off.lerp_to_gamma(pal.switch_on, t);
+    fill_rounded(ui.painter(), rect, 14, track, egui::Stroke::NONE);
+
+    let radius = 11.5;
+    let travel = rect.width() - 2.0 * (radius + 2.5);
+    let knob_center = egui::pos2(rect.left() + radius + 2.5 + travel * t, rect.center().y);
+
+    // 滑块下面一层极淡的投影。
+    ui.painter().circle_filled(
+        knob_center + egui::vec2(0.0, 1.5),
+        radius,
+        egui::Color32::from_black_alpha(36),
+    );
     ui.painter()
-        .circle_filled(egui::pos2(knob_x, rect.center().y), 8.0, egui::Color32::WHITE);
+        .circle_filled(knob_center, radius, egui::Color32::WHITE);
 
     response
 }
 
-/// 带图标背景的输入框（egui 自带的 TextEdit 外观略旧，这里统一成圆角描边风格）。
+/// 分段选择器（iOS 的 Segmented Control）。
+///
+/// 返回被点击的那一段的下标；没有点击则返回 `None`。
+pub fn segmented(ui: &mut egui::Ui, labels: &[&str], selected: usize) -> Option<usize> {
+    let pal = theme::palette();
+    let seg_w = 70.0;
+    let height = 30.0;
+    let pad = 2.0;
+    let total = egui::vec2(seg_w * labels.len() as f32 + pad * 2.0, height);
+
+    let (rect, _) = ui.allocate_exact_size(total, egui::Sense::hover());
+    fill_rounded(ui.painter(), rect, 8, pal.bg_soft, egui::Stroke::NONE);
+
+    let mut clicked = None;
+    for (i, label) in labels.iter().enumerate() {
+        let seg = egui::Rect::from_min_size(
+            egui::pos2(rect.left() + pad + seg_w * i as f32, rect.top() + pad),
+            egui::vec2(seg_w, height - pad * 2.0),
+        );
+        let response = ui.interact(seg, ui.scope_id().with(("segment", i)), egui::Sense::click());
+        let is_selected = i == selected;
+
+        if is_selected {
+            // 选中的一段「浮」起来：白底（深色模式为灰）+ 细投影。
+            ui.painter().add(
+                egui::Shadow {
+                    offset: [0, 1],
+                    blur: 4,
+                    spread: 0,
+                    color: egui::Color32::from_black_alpha(34),
+                }
+                .as_shape(seg, egui::CornerRadius::from(6u8)),
+            );
+            fill_rounded(ui.painter(), seg, 6, pal.segment_selected, egui::Stroke::NONE);
+        }
+
+        let color = if is_selected || response.hovered() {
+            pal.text
+        } else {
+            pal.text_dim
+        };
+        ui.painter().text(
+            seg.center(),
+            egui::Align2::CENTER_CENTER,
+            label,
+            egui::FontId::proportional(12.5),
+            color,
+        );
+
+        if response.clicked() {
+            clicked = Some(i);
+        }
+    }
+    clicked
+}
+
+/// 带标签的输入框：标签在上，输入区是白底圆角 + 细描边（深色模式为深灰）。
 pub fn field(ui: &mut egui::Ui, label: &str, text: &mut String, multiline: bool) {
     let pal = theme::palette();
-    ui.label(egui::RichText::new(label).size(12.0).color(pal.text_dim));
-    ui.add_space(5.0);
+    ui.label(egui::RichText::new(label).size(12.5).color(pal.text_dim));
+    ui.add_space(6.0);
 
     let frame = egui::Frame::new()
-        .fill(pal.bg_soft)
-        .stroke(egui::Stroke::new(1.0, pal.border))
-        .corner_radius(egui::CornerRadius::from(9u8))
-        .inner_margin(egui::Margin::symmetric(10, 8));
+        .fill(pal.surface)
+        .stroke(egui::Stroke::new(1.0, pal.border_strong))
+        .corner_radius(egui::CornerRadius::from(8u8))
+        .inner_margin(egui::Margin::symmetric(11, 8));
 
     frame.show(ui, |ui| {
+        // 外框已经画好了，TextEdit 自己的底和描边要关掉，否则会套出两层边框。
         if multiline {
             ui.add(
                 egui::TextEdit::multiline(text)
+                    .frame(egui::Frame::NONE).margin(egui::Margin::ZERO)
                     .desired_width(f32::INFINITY)
                     .desired_rows(5)
                     .font(egui::FontId::monospace(12.0))
@@ -239,12 +299,13 @@ pub fn field(ui: &mut egui::Ui, label: &str, text: &mut String, multiline: bool)
         } else {
             ui.add(
                 egui::TextEdit::singleline(text)
+                    .frame(egui::Frame::NONE).margin(egui::Margin::ZERO)
                     .desired_width(f32::INFINITY)
                     .hint_text(match label {
-                    "名称" => "给这个动作起个名字",
-                    "说明" => "一句话描述它的作用（可留空）",
-                    _ => "",
-                }),
+                        "名称" => "给这个动作起个名字",
+                        "说明" => "一句话描述它的作用（可留空）",
+                        _ => "",
+                    }),
             );
         }
     });

@@ -20,7 +20,8 @@ Windows 托盘常用动作工具。
   在两块缩放比例不同的显示器之间拖动时也会自动保持正确尺寸。
 - **管理员执行**：指令交给 Windows PowerShell（若已安装 PowerShell 7 则优先使用 `pwsh`），
   通过 `runas` 动词触发 UAC 提权，控制台窗口隐藏，标准输出与错误输出写入日志文件。
-- **现代化界面**：默认跟随 Windows 的浅色 / 深色设置，也可在设置里固定。
+- **Apple 风格界面**：系统蓝强调色、分组圆角列表、iOS 风格开关与分段选择器、
+  sheet 式弹窗；默认跟随 Windows 的浅色 / 深色设置，也可在设置里固定。
 
 ## 图标
 
@@ -102,6 +103,7 @@ TRAYPILOT_PREVIEW=popup  cargo run    # 预览托盘弹出菜单
 TRAYPILOT_PREVIEW=editor cargo run    # 预览编辑面板
 TRAYPILOT_PREVIEW=modal  cargo run    # 预览新建 / 编辑动作弹窗
 TRAYPILOT_PREVIEW=confirm cargo run   # 预览删除确认框
+TRAYPILOT_PREVIEW=settings cargo run  # 预览设置面板
 ```
 
 主题在设置里选择；调试时也可用环境变量 `TRAYPILOT_THEME=light|dark` 临时覆盖。

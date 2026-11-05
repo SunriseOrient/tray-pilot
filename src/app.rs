@@ -16,7 +16,7 @@ pub const MENU_ITEM_HEIGHT: f32 = 30.0;
 /// 菜单内容内边距（点）。
 pub const MENU_PADDING: f32 = 6.0;
 /// 面板内边距（点）。
-pub const PANEL_PADDING: f32 = 20.0;
+pub const PANEL_PADDING: f32 = 24.0;
 /// 窗口四周留给阴影的空白（点）。
 ///
 /// 保持为 0：窗口与面板完全重合，否则四周会留下一圈透明区域——
@@ -288,6 +288,10 @@ impl TrayPilotApp {
                 });
             }
             "editor" => open_editor(ctx),
+            "settings" => {
+                open_editor(ctx);
+                shared().settings_open = true;
+            }
             "confirm" => {
                 open_editor(ctx);
                 let first = shared().config.actions.first().map(|a| a.id.clone());
@@ -443,6 +447,7 @@ impl TrayPilotApp {
                 .with_decorations(true)
                 .with_transparent(false)
                 .with_resizable(false)
+                .with_active(std::env::var_os("TRAYPILOT_PREVIEW").is_none())
                 .with_maximize_button(true)
                 .with_visible(frames > 1)
                 .with_inner_size(size)

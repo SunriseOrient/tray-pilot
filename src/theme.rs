@@ -7,30 +7,43 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use eframe::egui;
 
 /// 一套完整的界面配色。
+///
+/// 配色参照 Apple 的系统色与 grouped 背景层级：
+/// `bg`（窗口底色）→ `surface`（卡片 / 菜单）→ `bg_soft`（控件填充）。
 #[derive(Clone, Copy)]
 pub struct Palette {
-    /// 面板背景。
+    /// 窗口底色（grouped background）。
     pub bg: Color32Alias,
-    /// 次级背景（输入框、代码块等）。
+    /// 卡片、菜单、输入框的底色（比窗口底色更「浮」一层）。
+    pub surface: Color32Alias,
+    /// 控件填充：次要按钮、分段控件轨道等。
     pub bg_soft: Color32Alias,
-    /// 分隔线 / 描边。
+    /// 分隔线 / 卡片描边。
     pub border: Color32Alias,
-    /// 窗口外框描边（没有投影时用来界定边界）。
+    /// 窗口 / 菜单外框描边。
     pub border_strong: Color32Alias,
     /// 主要文字。
     pub text: Color32Alias,
     /// 次要文字。
     pub text_dim: Color32Alias,
-    /// 强调色。
+    /// 三级文字（代码、占位）。
+    pub text_faint: Color32Alias,
+    /// 强调色（system blue）。
     pub accent: Color32Alias,
     /// 强调色（悬停）。
     pub accent_hover: Color32Alias,
     /// 强调色（淡染）。
     pub accent_soft: Color32Alias,
-    /// 危险操作。
+    /// 危险操作（system red）。
     pub danger: Color32Alias,
     /// 危险操作（淡染）。
     pub danger_soft: Color32Alias,
+    /// 开关打开时的轨道色（system green）。
+    pub switch_on: Color32Alias,
+    /// 开关关闭时的轨道色。
+    pub switch_off: Color32Alias,
+    /// 分段控件里被选中的那一段。
+    pub segment_selected: Color32Alias,
 }
 
 type Color32Alias = egui::Color32;
@@ -48,33 +61,43 @@ pub fn palette() -> Palette {
 
 fn light_palette() -> Palette {
     Palette {
-        bg: egui::Color32::from_rgb(255, 255, 255),
-        bg_soft: egui::Color32::from_rgb(244, 244, 248),
-        border: egui::Color32::from_rgb(229, 229, 236),
-        border_strong: egui::Color32::from_rgb(214, 214, 224),
-        text: egui::Color32::from_rgb(22, 22, 27),
-        text_dim: egui::Color32::from_rgb(113, 113, 126),
-        accent: egui::Color32::from_rgb(99, 102, 241),
-        accent_hover: egui::Color32::from_rgb(84, 87, 226),
-        accent_soft: egui::Color32::from_rgba_unmultiplied(99, 102, 241, 28),
-        danger: egui::Color32::from_rgb(215, 55, 72),
-        danger_soft: egui::Color32::from_rgba_unmultiplied(215, 55, 72, 26),
+        bg: egui::Color32::from_rgb(245, 245, 247),
+        surface: egui::Color32::from_rgb(255, 255, 255),
+        bg_soft: egui::Color32::from_rgb(238, 238, 240),
+        border: egui::Color32::from_rgb(229, 229, 234),
+        border_strong: egui::Color32::from_rgb(208, 208, 214),
+        text: egui::Color32::from_rgb(29, 29, 31),
+        text_dim: egui::Color32::from_rgb(110, 110, 115),
+        text_faint: egui::Color32::from_rgb(142, 142, 147),
+        accent: egui::Color32::from_rgb(0, 122, 255),
+        accent_hover: egui::Color32::from_rgb(10, 108, 224),
+        accent_soft: egui::Color32::from_rgba_unmultiplied(0, 122, 255, 30),
+        danger: egui::Color32::from_rgb(255, 59, 48),
+        danger_soft: egui::Color32::from_rgba_unmultiplied(255, 59, 48, 28),
+        switch_on: egui::Color32::from_rgb(52, 199, 89),
+        switch_off: egui::Color32::from_rgb(220, 220, 225),
+        segment_selected: egui::Color32::from_rgb(255, 255, 255),
     }
 }
 
 fn dark_palette() -> Palette {
     Palette {
-        bg: egui::Color32::from_rgb(27, 27, 33),
-        bg_soft: egui::Color32::from_rgb(38, 38, 46),
-        border: egui::Color32::from_rgb(54, 54, 65),
-        border_strong: egui::Color32::from_rgb(78, 78, 92),
-        text: egui::Color32::from_rgb(237, 237, 242),
-        text_dim: egui::Color32::from_rgb(152, 152, 166),
-        accent: egui::Color32::from_rgb(139, 139, 255),
-        accent_hover: egui::Color32::from_rgb(163, 163, 255),
-        accent_soft: egui::Color32::from_rgba_unmultiplied(139, 139, 255, 40),
-        danger: egui::Color32::from_rgb(255, 107, 107),
-        danger_soft: egui::Color32::from_rgba_unmultiplied(255, 107, 107, 38),
+        bg: egui::Color32::from_rgb(28, 28, 30),
+        surface: egui::Color32::from_rgb(44, 44, 46),
+        bg_soft: egui::Color32::from_rgb(58, 58, 60),
+        border: egui::Color32::from_rgb(56, 56, 58),
+        border_strong: egui::Color32::from_rgb(72, 72, 74),
+        text: egui::Color32::from_rgb(245, 245, 247),
+        text_dim: egui::Color32::from_rgb(152, 152, 157),
+        text_faint: egui::Color32::from_rgb(118, 118, 122),
+        accent: egui::Color32::from_rgb(10, 132, 255),
+        accent_hover: egui::Color32::from_rgb(64, 156, 255),
+        accent_soft: egui::Color32::from_rgba_unmultiplied(10, 132, 255, 52),
+        danger: egui::Color32::from_rgb(255, 69, 58),
+        danger_soft: egui::Color32::from_rgba_unmultiplied(255, 69, 58, 50),
+        switch_on: egui::Color32::from_rgb(48, 209, 88),
+        switch_off: egui::Color32::from_rgb(78, 78, 82),
+        segment_selected: egui::Color32::from_rgb(99, 99, 102),
     }
 }
 
@@ -161,12 +184,12 @@ pub fn apply(ctx: &egui::Context) {
 
     visuals.panel_fill = pal.bg;
     visuals.window_fill = pal.bg;
-    visuals.extreme_bg_color = pal.bg;
+    visuals.extreme_bg_color = pal.surface;
     visuals.faint_bg_color = pal.bg_soft;
     visuals.weak_text_color = Some(pal.text_dim);
     visuals.hyperlink_color = pal.accent;
     visuals.code_bg_color = pal.bg_soft;
-    visuals.text_edit_bg_color = Some(pal.bg_soft);
+    visuals.text_edit_bg_color = Some(pal.surface);
     visuals.selection.bg_fill = pal.accent_soft;
     visuals.selection.stroke = egui::Stroke::new(1.0, pal.accent);
     visuals.window_corner_radius = egui::CornerRadius::from(16u8);

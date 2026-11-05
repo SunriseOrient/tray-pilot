@@ -21,7 +21,7 @@ pub fn show(ui: &mut egui::Ui) {
 
     // 面板：圆角 + 描边。窗口与面板同尺寸，四周没有多余的透明区域。
     let frame = egui::Frame::new()
-        .fill(pal.bg)
+        .fill(pal.surface)
         .stroke(egui::Stroke::new(1.0, pal.border_strong))
         .corner_radius(egui::CornerRadius::from(10u8));
     ui.painter().add(frame.paint(panel));

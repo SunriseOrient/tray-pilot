@@ -103,7 +103,10 @@ pub fn activate(title: &str, topmost: bool) {
     unsafe {
         // SW_RESTORE 会触发一次重绘，让窗口真正被系统合成出来。
         let _ = ShowWindow(hwnd, SW_RESTORE);
-        force_foreground(hwnd);
+        // 预览模式只为看界面，不要抢用户当前窗口的焦点。
+        if std::env::var_os("TRAYPILOT_PREVIEW").is_none() {
+            force_foreground(hwnd);
+        }
         if topmost {
             let _ = SetWindowPos(
                 hwnd,
