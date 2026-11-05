@@ -58,8 +58,18 @@ pub struct Popup {
     pub size: egui::Vec2,
     /// 打开时间。
     pub opened_at: Instant,
-    /// 是否曾经获得过焦点（用于失焦自动关闭）。
-    pub focused_once: bool,
+    /// 鼠标哨兵是否已就绪。
+    ///
+    /// 菜单是被鼠标点击打开的，那一瞬间按键还按着、而且指针在菜单外面。
+    /// 必须等用户松开之后才开始判定「点击菜单外部」，否则菜单一出现就会被关掉。
+    pub click_armed: bool,
+    /// 上一次采样时鼠标是否按下，用于识别「刚按下」这个瞬间。
+    pub btn_was_down: bool,
+    /// 是否曾经成为过前台窗口。
+    ///
+    /// 只有「先拿到过前台」才在失焦时自动关闭——否则菜单刚弹出、系统还没允许
+    /// 它变成前台的那一瞬间就会被误判成「失去前台」而立刻消失。
+    pub got_foreground: bool,
     /// 状态提示，例如「已提交：重启 IIS」。
     pub status: Option<(String, Instant)>,
     /// 到点后自动关闭。
@@ -159,6 +169,84 @@ impl TrayPilotApp {
         }
     }
 
+    /// 盯着弹出菜单：一旦失去前台（用户点了别的程序、桌面或任务栏）就关掉它。
+    ///
+    /// 这段逻辑必须放在 `logic()` 里而不是菜单自己的 UI 回调里：菜单静止不动时
+    /// 事件循环是睡着的，UI 回调不一定会再跑，关闭也就无从触发。`logic()` 每轮
+    /// 都会执行，并且这里用 `request_repaint_after` 主动定时唤醒自己。
+    fn monitor_popup(&self, ctx: &egui::Context) {
+        let visible = {
+            let sh = shared();
+            match sh.popup.as_ref() {
+                Some(popup) => popup.visible,
+                None => return,
+            }
+        };
+        if !visible {
+            return;
+        }
+
+        // 没有鼠标事件时也要能及时检测到前台变化，因此定时唤醒自己。
+        ctx.request_repaint_after(Duration::from_millis(60));
+
+        // 兜底：用户点了菜单外面。
+        //
+        // 只靠「失去前台」并不可靠——某些情况下点击不会触发前台切换，菜单就会
+        // 一直挂在屏幕上。这里直接轮询鼠标按键，按在菜单矩形之外就关闭，不依赖
+        // 任何焦点事件。
+        //
+        // 注意时序：菜单是被点击打开的，那一刻按键还按着、指针也在外面，
+        // 所以要等用户先松开（armed），之后出现「新的按下」才算数。
+        let down = crate::win::mouse_down();
+        let (armed, was_down) = {
+            let sh = shared();
+            match sh.popup.as_ref() {
+                Some(p) => (p.click_armed, p.btn_was_down),
+                None => return,
+            }
+        };
+        if !armed {
+            if !down {
+                if let Some(popup) = shared().popup.as_mut() {
+                    popup.click_armed = true;
+                }
+            }
+        } else if down && !was_down && crate::win::cursor_outside(POPUP_TITLE) {
+            close_popup();
+            ctx.request_repaint();
+            return;
+        }
+        if let Some(popup) = shared().popup.as_mut() {
+            popup.btn_was_down = down;
+        }
+
+        // 记录「已经拿到过前台」，之后失去前台才关闭。
+        if crate::win::is_foreground(POPUP_TITLE) {
+            if let Some(popup) = shared().popup.as_mut() {
+                popup.got_foreground = true;
+            }
+            return;
+        }
+
+        let (got_foreground, elapsed) = {
+            let sh = shared();
+            match sh.popup.as_ref() {
+                Some(p) => (
+                    p.got_foreground,
+                    Instant::now().saturating_duration_since(p.opened_at),
+                ),
+                None => return,
+            }
+        };
+        // 还没拿到过前台、或者刚刚弹出，都不判断。
+        if !got_foreground || elapsed < Duration::from_millis(250) {
+            return;
+        }
+
+        close_popup();
+        ctx.request_repaint();
+    }
+
     /// 系统主题切换时同步更新托盘图标（深色任务栏配白色图形）。
     fn sync_tray_icon(&mut self, ctx: &egui::Context) {
         let dark = matches!(ctx.system_theme(), Some(egui::Theme::Dark));
@@ -237,7 +325,9 @@ impl TrayPilotApp {
                         popup.size = size;
                         popup.visible = true;
                         popup.opened_at = Instant::now();
-                        popup.focused_once = false;
+                        popup.got_foreground = false;
+                        popup.click_armed = false;
+                        popup.btn_was_down = true;
                         popup.status = None;
                         popup.close_at = None;
                         popup.frames = 0;
@@ -286,7 +376,9 @@ impl TrayPilotApp {
                     pos,
                     size,
                     opened_at: Instant::now(),
-                    focused_once: false,
+                    got_foreground: false,
+                    click_armed: false,
+                    btn_was_down: true,
                     status: None,
                     close_at: None,
                     frames: 0,
@@ -326,7 +418,11 @@ impl TrayPilotApp {
             ctx.show_viewport_deferred(popup_id(), builder, |ui, _| crate::ui::popup::show(ui));
 
             // 显示出来并激活窗口，否则鼠标事件收不到。
-            if visible && frames == 1 {
+            //
+            // 窗口刚创建/刚显示时按标题还找不到它，单次激活可能落空，
+            // 所以一直重试到真正拿到前台为止；拿到之后就停手，
+            // 这样用户点其它地方时菜单能正常失焦关闭。
+            if visible && frames <= 30 && !crate::win::is_foreground(POPUP_TITLE) {
                 crate::win::activate(POPUP_TITLE, true);
             }
         }
@@ -362,6 +458,7 @@ impl eframe::App for TrayPilotApp {
         self.sync_tray_icon(ctx);
         self.maybe_preview(ctx);
         self.handle_commands(ctx);
+        self.monitor_popup(ctx);
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {

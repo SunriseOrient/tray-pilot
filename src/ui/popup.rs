@@ -2,8 +2,6 @@
 //!
 //! 样式参考 Windows 原生右键菜单：单行条目、组间分隔线、悬停整行高亮。
 
-use std::time::{Duration, Instant};
-
 use eframe::egui;
 
 use crate::app;
@@ -75,26 +73,8 @@ pub fn show(ui: &mut egui::Ui) {
     let escape = ui.ctx().input(|i| i.key_pressed(egui::Key::Escape));
     if outside || escape {
         app::close_popup();
-        return;
     }
 
-    // 失焦自动关闭（首次获得焦点后生效，避免刚弹出就被误关）。
-    let focused = ui.ctx().input(|i| i.viewport().focused.unwrap_or(false));
-    let now = Instant::now();
-    let mut should_close = false;
-    {
-        let mut sh = app::shared();
-        if let Some(popup) = sh.popup.as_mut() {
-            if focused {
-                popup.focused_once = true;
-            } else if popup.focused_once
-                && now.saturating_duration_since(popup.opened_at) > Duration::from_millis(300)
-            {
-                should_close = true;
-            }
-        }
-    }
-    if should_close {
-        app::close_popup();
-    }
+    // 「点击其它程序就关闭」由 app::monitor_popup 负责（它在 logic() 里运行，
+    // 不依赖这个窗口重绘），这里只管窗口内部的 Esc 与空白区域。
 }

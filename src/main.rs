@@ -66,12 +66,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     TrayIconEvent::set_event_handler(Some(move |event| {
         if let TrayIconEvent::Click {
             button,
+            button_state,
             position,
             rect,
             ..
         } = event
         {
+            // 只在「松开」时响应：按下和松开各会发一次事件，都处理的话菜单
+            // 会被重复打开两次（表现为闪一下）。
             if matches!(
+                button_state,
+                tray_icon::MouseButtonState::Up
+            ) && matches!(
                 button,
                 tray_icon::MouseButton::Left | tray_icon::MouseButton::Right
             ) {
