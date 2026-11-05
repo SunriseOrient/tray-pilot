@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tray_icon = build_tray_icon(theme::system_is_dark());
     let tray = TrayIconBuilder::new()
         .with_icon(tray_icon)
-        .with_tooltip("TrayPilot · 常用动作")
+        .with_tooltip("TrayPilot")
         .build()?;
 
     // 托盘事件 → 应用命令
