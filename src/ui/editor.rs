@@ -69,7 +69,8 @@ pub fn show(ui: &mut egui::Ui) {
         // 三种弹窗共用同一套结构：内容照常画在后面（被遮罩压暗）、
         // 遮罩拦截输入、弹窗盖在最上面。这样无论打开哪个弹窗，
         // 背景看起来都是一致的。
-        show_content(ui, panel);
+        let modal_open = draft_active || settings_open || confirm_delete.is_some();
+        show_content(ui, panel, !modal_open);
 
         if draft_active {
             dim_background(ui, panel);
@@ -150,7 +151,7 @@ fn paint_sheet(ui: &egui::Ui, rect: egui::Rect, radius: u8) {
 }
 
 /// 面板主体。
-fn show_content(ui: &mut egui::Ui, panel: egui::Rect) {
+fn show_content(ui: &mut egui::Ui, panel: egui::Rect, interactive: bool) {
     let pal = theme::palette();
     ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
     let width = ui.available_width();
@@ -217,7 +218,7 @@ fn show_content(ui: &mut egui::Ui, panel: egui::Rect) {
             }
 
             for (i, action) in actions.iter().enumerate() {
-                action_row(ui, width, action);
+                action_row(ui, width, action, interactive);
                 if i + 1 < actions.len() {
                     hairline(ui, width, 0.0);
                 }
@@ -239,14 +240,21 @@ fn show_content(ui: &mut egui::Ui, panel: egui::Rect) {
 }
 
 /// 一行动作：名称 + 说明；悬停时右侧淡入「编辑 / 删除」，并显示命令提示。
-fn action_row(ui: &mut egui::Ui, width: f32, action: &Action) {
+fn action_row(ui: &mut egui::Ui, width: f32, action: &Action, interactive: bool) {
     let pal = theme::palette();
 
-    let (rect, response) = ui.allocate_exact_size(
-        egui::vec2(width, ROW_HEIGHT),
-        egui::Sense::click(),
-    );
-    let hovered = response.hovered();
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, ROW_HEIGHT), egui::Sense::hover());
+
+    // 悬停只看「指针是否在这个矩形里」，不看 egui 的命中测试结果。
+    //
+    // 用 `Response::hovered()` 会闪：鼠标移到行内的「编辑/删除」上时，按钮成为
+    // 命中目标，行本身就「不再悬停」→ 按钮开始淡出 → 淡出后指针又落回行上 →
+    // 按钮再淡入，如此反复。几何判断不受层级影响，所以状态是稳定的。
+    let hovered = interactive
+        && ui
+            .ctx()
+            .input(|i| i.pointer.interact_pos())
+            .is_some_and(|p| rect.contains(p));
 
     // 悬停：极淡的底色，不用卡片描边。
     if hovered {
@@ -311,8 +319,10 @@ fn action_row(ui: &mut egui::Ui, width: f32, action: &Action) {
     }
 
     // 命令放在悬停提示里，列表保持清爽。
-    if !action.command.is_empty() {
-        response.on_hover_text(egui::RichText::new(&action.command).monospace().size(12.0));
+    // 挂在左侧文字区域上而不是整行：鼠标移到右侧按钮时提示不会跟着闪。
+    if !action.command.is_empty() && interactive {
+        text.response()
+            .on_hover_text(egui::RichText::new(&action.command).monospace().size(12.0));
     }
 }
 
@@ -333,7 +343,7 @@ fn row_action(ui: &mut egui::Ui, label: &str, kind: ButtonKind, alpha: f32) -> b
         ButtonKind::DangerPlain => pal.danger,
         _ => pal.text_dim,
     };
-    let color = if hot { fade(base, alpha) } else { fade(base, alpha * 0.9) };
+    let color = fade(base, alpha);
 
     ui.painter().text(
         rect.center(),
