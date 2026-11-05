@@ -352,6 +352,10 @@ fn row_action(ui: &mut egui::Ui, label: &str, kind: ButtonKind, alpha: f32) -> b
         egui::FontId::proportional(12.0),
         color,
     );
+
+    if response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
     response.clicked()
 }
 

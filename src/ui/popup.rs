@@ -36,15 +36,12 @@ pub fn show(ui: &mut egui::Ui) {
             sh.config.actions.clone()
         };
 
-        // 动作组
+        // 动作组。说明直接排在条目里——弹出菜单是一个独立的小窗口，
+        // 悬浮提示画不出窗口边界，一定会被裁掉。
         let mut handled = false;
         for action in &actions {
-            let response = menu_item(ui, &action.name, &action.id, width);
-            let clicked = response.clicked();
-            if !action.description.is_empty() {
-                response.on_hover_text(&action.description);
-            }
-            if clicked {
+            let response = menu_item(ui, &action.name, Some(&action.description), &action.id, width);
+            if response.clicked() {
                 app::run_action(&action.id);
                 handled = true;
                 break;
@@ -57,10 +54,10 @@ pub fn show(ui: &mut egui::Ui) {
             }
 
             // 编辑 / 退出
-            if menu_item(ui, "编辑", "edit", width).clicked() {
+            if menu_item(ui, "编辑", None, "edit", width).clicked() {
                 app::close_popup();
                 app::open_editor(ui.ctx());
-            } else if menu_item(ui, "退出", "quit", width).clicked() {
+            } else if menu_item(ui, "退出", None, "quit", width).clicked() {
                 app::quit(ui.ctx());
             }
         }

@@ -91,7 +91,7 @@ pub fn flat_button(
         fg,
     );
 
-    response
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 /// 关闭按钮：手绘的叉号，悬停时出现淡底。
@@ -119,7 +119,7 @@ pub fn close_button(ui: &mut egui::Ui) -> egui::Response {
     ui.painter()
         .line_segment([c + egui::vec2(r, -r), c + egui::vec2(-r, r)], stroke);
 
-    response
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 /// 模态弹窗的输入拦截层。
@@ -152,28 +152,92 @@ pub fn menu_separator(ui: &mut egui::Ui, width: f32) {
     ui.add_space(4.0);
 }
 
-/// 菜单条目：单行文字，悬停时淡底 + 文字变深。不用彩色高亮。
-pub fn menu_item(ui: &mut egui::Ui, label: &str, id: &str, width: f32) -> egui::Response {
+/// 菜单条目的内边距。
+const MENU_PAD_V: f32 = 7.0;
+const MENU_PAD_H: f32 = 10.0;
+/// 菜单条目：标题字号。
+const MENU_NAME_SIZE: f32 = 13.0;
+/// 菜单条目：说明字号。
+const MENU_DESC_SIZE: f32 = 11.5;
+
+/// 菜单条目的高度。
+///
+/// 说明文字会自动换行，所以高度必须按**同样的换行宽度**实际排版后测量，
+/// 否则窗口高度和内容对不上，多出来的部分会被窗口裁掉。
+pub fn menu_item_height(ctx: &egui::Context, desc: Option<&str>, width: f32) -> f32 {
+    let painter = ctx.debug_painter();
+    let name_font = egui::FontId::proportional(MENU_NAME_SIZE);
+
+    let Some(desc) = desc.filter(|d| !d.trim().is_empty()) else {
+        return crate::app::MENU_ITEM_HEIGHT;
+    };
+
+    let name_h = painter
+        .layout_no_wrap("测".to_owned(), name_font, egui::Color32::WHITE)
+        .size()
+        .y;
+    let desc_h = painter
+        .layout(
+            desc.to_owned(),
+            egui::FontId::proportional(MENU_DESC_SIZE),
+            egui::Color32::WHITE,
+            width - MENU_PAD_H * 2.0,
+        )
+        .size()
+        .y;
+
+    MENU_PAD_V * 2.0 + name_h + 3.0 + desc_h
+}
+
+/// 菜单条目：标题 + 说明，悬停时淡底。不用彩色高亮。
+pub fn menu_item(
+    ui: &mut egui::Ui,
+    title: &str,
+    desc: Option<&str>,
+    id: &str,
+    width: f32,
+) -> egui::Response {
     let pal = theme::palette();
-    let height = crate::app::MENU_ITEM_HEIGHT;
+    let height = menu_item_height(ui.ctx(), desc, width);
 
     let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
-    let response = ui.interact(rect, ui.make_persistent_id(id), egui::Sense::click());
+    let response = ui
+        .interact(rect, ui.make_persistent_id(id), egui::Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
     let hovered = response.hovered();
 
     if hovered {
         fill_rounded(ui.painter(), rect, 5, pal.bg_soft, egui::Stroke::NONE);
     }
 
-    let color = pal.text;
-    let font = egui::FontId::proportional(13.0);
-    let text = ellipsize(ui, label, font.clone(), width - 24.0);
-    let galley = ui.painter().layout_no_wrap(text, font, color);
+    let name_font = egui::FontId::proportional(MENU_NAME_SIZE);
+    let name = ellipsize(ui, title, name_font.clone(), width - MENU_PAD_H * 2.0);
+    let galley = ui.painter().layout_no_wrap(name, name_font, pal.text);
+    let name_h = galley.size().y;
+
+    // 标题贴在顶部内边距之下；说明跟在标题后面自动换行。
     ui.painter().galley(
-        egui::pos2(rect.left() + 10.0, rect.center().y - galley.size().y * 0.5),
+        egui::pos2(rect.left() + MENU_PAD_H, rect.top() + MENU_PAD_V),
         galley,
-        color,
+        pal.text,
     );
+
+    if let Some(desc) = desc.filter(|d| !d.trim().is_empty()) {
+        let galley = ui.painter().layout(
+            desc.to_owned(),
+            egui::FontId::proportional(MENU_DESC_SIZE),
+            pal.text_dim,
+            width - MENU_PAD_H * 2.0,
+        );
+        ui.painter().galley(
+            egui::pos2(
+                rect.left() + MENU_PAD_H,
+                rect.top() + MENU_PAD_V + name_h + 3.0,
+            ),
+            galley,
+            pal.text_dim,
+        );
+    }
 
     response
 }
@@ -219,7 +283,7 @@ pub fn switch(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
     ui.painter()
         .circle_filled(center, radius, egui::Color32::WHITE);
 
-    response
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 /// 分段选择器。选中段是一块略亮的圆角底。
@@ -261,6 +325,9 @@ pub fn segmented(ui: &mut egui::Ui, labels: &[&str], selected: usize) -> Option<
             color,
         );
 
+        if response.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
         if response.clicked() {
             clicked = Some(i);
         }

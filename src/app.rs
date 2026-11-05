@@ -10,7 +10,7 @@ use crate::config::{Action, AppConfig};
 use crate::{exec, theme};
 
 /// 弹出菜单面板宽度（点）。
-pub const POPUP_WIDTH: f32 = 250.0;
+pub const POPUP_WIDTH: f32 = 268.0;
 /// 菜单条目高度（点）。
 pub const MENU_ITEM_HEIGHT: f32 = 30.0;
 /// 菜单内容内边距（点）。
@@ -189,6 +189,11 @@ impl TrayPilotApp {
             return;
         }
 
+        // 预览模式只为看界面，不做任何「自动关闭」。
+        if std::env::var_os("TRAYPILOT_PREVIEW").is_some() {
+            return;
+        }
+
         // 没有鼠标事件时也要能及时检测到前台变化，因此定时唤醒自己。
         ctx.request_repaint_after(Duration::from_millis(60));
 
@@ -325,21 +330,32 @@ impl TrayPilotApp {
         for cmd in commands {
             match cmd {
                 TrayCommand::ShowPopup { tray } => {
-                    let count = sh.config.actions.len();
-                    let (pos, size) = popup_spec(ctx, tray, count);
-                    if let Some(popup) = sh.popup.as_mut() {
-                        popup.pos = pos;
-                        popup.size = size;
-                        popup.visible = true;
-                        popup.opened_at = Instant::now();
-                        popup.got_foreground = false;
-                        popup.click_armed = false;
-                        popup.btn_was_down = true;
-                        popup.status = None;
-                        popup.close_at = None;
-                        popup.frames = 0;
-                        opened = true;
-                    }
+                    let (pos, size) = popup_spec(ctx, tray, &sh.config.actions);
+                    // 弹窗状态平时由 show_children 惰性创建，但它比这里跑得晚。
+                    // 如果点击发生在第一帧之前，状态还不存在——不能因此丢掉命令。
+                    let popup = sh.popup.get_or_insert_with(|| Popup {
+                        pos,
+                        size,
+                        opened_at: Instant::now(),
+                        got_foreground: false,
+                        status: None,
+                        close_at: None,
+                        frames: 0,
+                        visible: false,
+                        click_armed: false,
+                        btn_was_down: true,
+                    });
+                    popup.pos = pos;
+                    popup.size = size;
+                    popup.visible = true;
+                    popup.opened_at = Instant::now();
+                    popup.got_foreground = false;
+                    popup.click_armed = false;
+                    popup.btn_was_down = true;
+                    popup.status = None;
+                    popup.close_at = None;
+                    popup.frames = 0;
+                    opened = true;
                 }
             }
         }
@@ -377,8 +393,7 @@ impl TrayPilotApp {
             // 菜单窗口常驻：启动时创建好并保持隐藏，点击托盘只是切换可见性。
             // 这样既不会出现「窗口已显示但还没画出来」的白框，也没有新建窗口的延迟。
             if sh.popup.is_none() {
-                let count = sh.config.actions.len();
-                let (pos, size) = initial_popup_spec(ctx, count);
+                let (pos, size) = initial_popup_spec(ctx, &sh.config.actions);
                 sh.popup = Some(Popup {
                     pos,
                     size,
@@ -483,11 +498,11 @@ impl eframe::App for TrayPilotApp {
 }
 
 /// 菜单窗口在启动时的初始位置与尺寸（不可见，仅用于建窗）。
-fn initial_popup_spec(ctx: &egui::Context, count: usize) -> (egui::Pos2, egui::Vec2) {
+fn initial_popup_spec(ctx: &egui::Context, actions: &[Action]) -> (egui::Pos2, egui::Vec2) {
     let monitor = ctx
         .input(|i| i.viewport().monitor_size)
         .unwrap_or(egui::vec2(1920.0, 1080.0));
-    let panel_h = popup_panel_height(count);
+    let panel_h = popup_panel_height(ctx, actions);
     let win_w = POPUP_WIDTH;
     let win_h = panel_h;
     (
@@ -500,9 +515,9 @@ fn initial_popup_spec(ctx: &egui::Context, count: usize) -> (egui::Pos2, egui::V
 fn popup_spec(
     ctx: &egui::Context,
     tray: (f64, f64, f64, f64),
-    count: usize,
+    actions: &[Action],
 ) -> (egui::Pos2, egui::Vec2) {
-    let panel_h = f64::from(popup_panel_height(count));
+    let panel_h = f64::from(popup_panel_height(ctx, actions));
     let win_w = f64::from(POPUP_WIDTH) + 2.0 * f64::from(WINDOW_MARGIN);
     let win_h = panel_h + 2.0 * f64::from(WINDOW_MARGIN);
 
@@ -528,10 +543,19 @@ fn popup_spec(
 }
 
 /// 弹出菜单面板的高度（点）。
-pub fn popup_panel_height(count: usize) -> f32 {
-    // 动作条目 + 分组分隔线 + 「编辑」「退出」两项
-    let content = count as f32 * MENU_ITEM_HEIGHT
-        + if count > 0 { 11.0 } else { 0.0 }
+///
+/// 每个动作条目带一行自动换行的说明，高度逐个实测，保证窗口装得下全部内容。
+pub fn popup_panel_height(ctx: &egui::Context, actions: &[Action]) -> f32 {
+    let inner_width = POPUP_WIDTH - 2.0 * MENU_PADDING;
+    let items: f32 = actions
+        .iter()
+        .map(|a| {
+            crate::ui::menu_item_height(ctx, Some(&a.description), inner_width)
+        })
+        .sum();
+
+    let content = items
+        + if actions.is_empty() { 0.0 } else { 11.0 }
         + 2.0 * MENU_ITEM_HEIGHT;
     content + 2.0 * MENU_PADDING
 }
