@@ -36,9 +36,9 @@ pub fn app_icon() -> Arc<egui::IconData> {
 }
 
 /// 弹出菜单窗口标题。
-pub const POPUP_TITLE: &str = "TrayPilot · 常用动作";
+pub const POPUP_TITLE: &str = "TrayPilot Menu";
 /// 编辑面板窗口标题。
-pub const EDITOR_TITLE: &str = "TrayPilot · 常用动作管理";
+pub const EDITOR_TITLE: &str = "TrayPilot Actions";
 
 /// 弹出菜单视口 ID。
 pub fn popup_id() -> egui::ViewportId {
@@ -292,13 +292,17 @@ impl TrayPilotApp {
         if let Some((pos, size, frames)) = editor {
             // 编辑面板使用原生窗口：系统标题栏（图标 / 最小化 / 最大化 / 关闭）
             // 与 Windows 11 的原生圆角都由 DWM 负责。
+            //
+            // 尺寸写死：只允许「默认大小」和「最大化」两种状态。
+            // 关掉 RESIZABLE（WS_SIZEBOX）后，拖拽边框不会改变窗口大小；
+            // 最大化按钮是独立的 WS_MAXIMIZEBOX 标志，仍然保留。
             let builder = egui::ViewportBuilder::default()
                 .with_title(EDITOR_TITLE)
                 .with_icon(app_icon())
                 .with_decorations(true)
                 .with_transparent(false)
-                .with_resizable(true)
-                .with_min_inner_size(egui::vec2(460.0, 320.0))
+                .with_resizable(false)
+                .with_maximize_button(true)
                 .with_inner_size(size)
                 .with_position(pos);
             ctx.show_viewport_deferred(editor_id(), builder, |ui, _| crate::ui::editor::show(ui));
