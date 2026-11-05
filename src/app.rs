@@ -114,6 +114,8 @@ pub struct Shared {
     pub toast: Option<Toast>,
     /// 待确认删除的动作 ID（弹出确认框）。
     pub confirm_delete: Option<String>,
+    /// 设置面板是否打开。
+    pub settings_open: bool,
     pub quit: bool,
     pending: Vec<TrayCommand>,
 }
@@ -126,6 +128,7 @@ static SHARED: LazyLock<Mutex<Shared>> = LazyLock::new(|| {
         draft: None,
         toast: None,
         confirm_delete: None,
+        settings_open: false,
         quit: false,
         pending: Vec::new(),
     })
@@ -578,6 +581,18 @@ pub fn set_popup_status(text: String) {
     if let Some(popup) = sh.popup.as_mut() {
         popup.status = Some((text, now));
         popup.close_at = Some(now + Duration::from_millis(1100));
+    }
+}
+
+/// 修改配置并立即保存。保存失败会弹出提示。
+pub fn update_config(change: impl FnOnce(&mut AppConfig)) {
+    let config = {
+        let mut sh = shared();
+        change(&mut sh.config);
+        sh.config.clone()
+    };
+    if let Err(err) = crate::config::save(&config) {
+        toast(err, true);
     }
 }
 

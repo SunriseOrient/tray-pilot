@@ -29,12 +29,45 @@ impl Action {
     }
 }
 
+/// 主题模式。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ThemeMode {
+    /// 跟随系统。
+    #[default]
+    System,
+    /// 浅色。
+    Light,
+    /// 深色。
+    Dark,
+}
+
+impl ThemeMode {
+    /// 供界面显示的中文名。
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::System => "跟随系统",
+            Self::Light => "浅色",
+            Self::Dark => "深色",
+        }
+    }
+
+    /// 三种模式，用于切换顺序。
+    pub const ALL: [Self; 3] = [Self::System, Self::Light, Self::Dark];
+}
+
 /// 应用配置。
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AppConfig {
     /// 是否以管理员身份执行指令。
     #[serde(default = "default_true")]
     pub elevate: bool,
+    /// 是否随系统启动。
+    #[serde(default)]
+    pub autostart: bool,
+    /// 界面主题。
+    #[serde(default)]
+    pub theme: ThemeMode,
     /// 动作列表。
     #[serde(default)]
     pub actions: Vec<Action>,
@@ -48,6 +81,8 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             elevate: true,
+            autostart: false,
+            theme: ThemeMode::System,
             actions: vec![
                 Action::new(
                     "刷新 DNS 缓存",
@@ -121,4 +156,31 @@ pub fn new_id() -> String {
         .map(|d| d.as_nanos())
         .unwrap_or(0);
     format!("a{nanos:x}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_config_without_new_fields_still_loads() {
+        // 旧版本写出的配置没有 autostart / theme，必须能正常读取并取默认值。
+        let json = r#"{ "elevate": false, "actions": [] }"#;
+        let cfg: AppConfig = serde_json::from_str(json).unwrap();
+        assert!(!cfg.elevate);
+        assert!(!cfg.autostart);
+        assert_eq!(cfg.theme, ThemeMode::System);
+    }
+
+    #[test]
+    fn theme_mode_round_trips_as_lowercase() {
+        let cfg = AppConfig {
+            theme: ThemeMode::Dark,
+            ..AppConfig::default()
+        };
+        let text = serde_json::to_string(&cfg).unwrap();
+        assert!(text.contains(r#""theme":"dark""#));
+        let back: AppConfig = serde_json::from_str(&text).unwrap();
+        assert_eq!(back.theme, ThemeMode::Dark);
+    }
 }

@@ -7,6 +7,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
+mod autostart;
 mod config;
 mod exec;
 mod icon;
@@ -51,6 +52,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let mut shared = app::shared();
         shared.config = config::load();
+        // 开机启动以注册表的实际状态为准（程序被移动或被别的工具改过都能纠正）。
+        shared.config.autostart = autostart::is_enabled();
     }
 
     // 托盘图标：按当前系统主题选择深色 / 浅色任务栏对应的那一套。

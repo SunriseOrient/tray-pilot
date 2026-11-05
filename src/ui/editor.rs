@@ -3,7 +3,7 @@
 use eframe::egui;
 
 use crate::app::{self, Draft};
-use crate::config::Action;
+use crate::config::{Action, ThemeMode};
 use crate::theme;
 use crate::ui::{close_button, divider, field, flat_button, switch, ButtonKind};
 
@@ -43,9 +43,9 @@ pub fn show(ui: &mut egui::Ui) {
     // 尺寸兜底：见 enforce_fixed_size 的说明。
     enforce_fixed_size(ui);
 
-    let (draft_active, confirm_delete) = {
+    let (draft_active, settings_open, confirm_delete) = {
         let sh = app::shared();
-        (sh.draft.is_some(), sh.confirm_delete.clone())
+        (sh.draft.is_some(), sh.settings_open, sh.confirm_delete.clone())
     };
     let content = panel.shrink(app::PANEL_PADDING);
 
@@ -56,7 +56,10 @@ pub fn show(ui: &mut egui::Ui) {
             show_modal(ui, panel);
         } else {
             show_content(ui, panel);
-            if confirm_delete.is_some() {
+            if settings_open {
+                dim_background(ui, panel);
+                show_settings(ui, panel);
+            } else if confirm_delete.is_some() {
                 dim_background(ui, panel);
                 show_delete_confirm(ui, panel);
             }
@@ -202,24 +205,38 @@ fn show_content(ui: &mut egui::Ui, panel: egui::Rect) {
     ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
     let width = ui.available_width();
 
-    let (count, elevate) = {
-        let sh = app::shared();
-        (sh.config.actions.len(), sh.config.elevate)
-    };
+    let count = app::shared().config.actions.len();
 
-    ui.label(
-        egui::RichText::new(format!("共 {count} 个动作"))
-            .size(12.0)
-            .color(pal.text_dim),
-    );
+    // 顶栏：左边是数量，所有操作按钮集中在右上角。
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing = egui::vec2(8.0, 0.0);
+        ui.label(
+            egui::RichText::new(format!("共 {count} 个动作"))
+                .size(12.0)
+                .color(pal.text_dim),
+        );
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            // right_to_left：先加的在最右边。
+            if flat_button(ui, "设置", egui::vec2(72.0, 32.0), ButtonKind::Ghost).clicked() {
+                app::shared().settings_open = true;
+            }
+            if flat_button(ui, "新建动作", egui::vec2(88.0, 32.0), ButtonKind::Primary).clicked() {
+                app::shared().draft = Some(Draft {
+                    id: None,
+                    name: String::new(),
+                    description: String::new(),
+                    command: String::new(),
+                });
+            }
+        });
+    });
 
-    ui.add_space(10.0);
+    ui.add_space(12.0);
     divider(ui, width);
     ui.add_space(12.0);
 
-    // 动作列表
-    let footer_height = 46.0;
-    let list_height = (ui.available_height() - footer_height - 14.0).max(120.0);
+    // 动作列表：占满剩余空间。
+    let list_height = ui.available_height().max(120.0);
     let actions = app::shared().config.actions.clone();
 
     egui::ScrollArea::vertical()
@@ -236,7 +253,7 @@ fn show_content(ui: &mut egui::Ui, panel: egui::Rect) {
                     );
                     ui.add_space(6.0);
                     ui.label(
-                        egui::RichText::new("点击下方「新建动作」添加第一个")
+                        egui::RichText::new("点击右上角「新建动作」添加第一个")
                             .size(12.0)
                             .color(pal.text_dim),
                     );
@@ -248,43 +265,6 @@ fn show_content(ui: &mut egui::Ui, panel: egui::Rect) {
                 }
             }
         });
-
-    ui.add_space(2.0);
-    divider(ui, width);
-    ui.add_space(14.0);
-
-    // 底部
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing = egui::vec2(10.0, 0.0);
-        if flat_button(ui, "新建动作", egui::vec2(96.0, 36.0), ButtonKind::Primary).clicked() {
-            app::shared().draft = Some(Draft {
-                id: None,
-                name: String::new(),
-                description: String::new(),
-                command: String::new(),
-            });
-        }
-
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let mut value = elevate;
-            let response = switch(ui, &mut value);
-            if response.clicked() && value != elevate {
-                let config = {
-                    let mut sh = app::shared();
-                    sh.config.elevate = value;
-                    sh.config.clone()
-                };
-                if let Err(err) = crate::config::save(&config) {
-                    app::toast(err, true);
-                }
-            }
-            ui.label(
-                egui::RichText::new("以管理员身份运行")
-                    .size(12.0)
-                    .color(pal.text_dim),
-            );
-        });
-    });
 
     // 提示消息
     let toast = app::shared().toast.clone();
@@ -313,6 +293,124 @@ fn show_content(ui: &mut egui::Ui, panel: egui::Rect) {
             fg,
         );
     }
+}
+
+/// 设置面板：管理员运行、开机启动、主题。
+fn show_settings(ui: &mut egui::Ui, panel: egui::Rect) {
+    let pal = theme::palette();
+
+    let rect = egui::Rect::from_center_size(panel.center(), egui::vec2(440.0, 322.0));
+    let frame = egui::Frame::new()
+        .fill(pal.bg)
+        .stroke(egui::Stroke::new(1.0, pal.border_strong))
+        .corner_radius(egui::CornerRadius::from(12u8));
+    ui.painter().add(frame.paint(rect));
+
+    let (elevate, autostart, mode) = {
+        let sh = app::shared();
+        (sh.config.elevate, sh.config.autostart, sh.config.theme)
+    };
+
+    let inner = inset(rect, app::PANEL_PADDING, app::PANEL_PADDING);
+    let mut close = false;
+    let mut new_elevate = elevate;
+    let mut new_autostart = autostart;
+    let mut new_mode = mode;
+
+    ui.scope_builder(egui::UiBuilder::new().max_rect(inner), |ui| {
+        ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
+
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("设置").size(16.0).strong().color(pal.text));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if close_button(ui).clicked() {
+                    close = true;
+                }
+            });
+        });
+        ui.add_space(12.0);
+        divider(ui, inner.width());
+        ui.add_space(8.0);
+
+        setting_switch(
+            ui,
+            "以管理员身份运行",
+            "执行动作时通过 UAC 提权",
+            &mut new_elevate,
+        );
+        setting_switch(
+            ui,
+            "开机启动",
+            "登录 Windows 后自动运行并常驻托盘",
+            &mut new_autostart,
+        );
+
+        ui.add_space(4.0);
+        divider(ui, inner.width());
+        ui.add_space(12.0);
+
+        ui.label(egui::RichText::new("主题").size(13.5).color(pal.text));
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(8.0, 0.0);
+            for option in ThemeMode::ALL {
+                let kind = if option == new_mode {
+                    ButtonKind::Primary
+                } else {
+                    ButtonKind::Ghost
+                };
+                if flat_button(ui, option.label(), egui::vec2(96.0, 32.0), kind).clicked() {
+                    new_mode = option;
+                }
+            }
+        });
+    });
+
+    if new_elevate != elevate {
+        app::update_config(|c| c.elevate = new_elevate);
+    }
+    if new_autostart != autostart {
+        match crate::autostart::set_enabled(new_autostart) {
+            Ok(()) => app::update_config(|c| c.autostart = new_autostart),
+            Err(err) => app::toast(err, true),
+        }
+    }
+    if new_mode != mode {
+        app::update_config(|c| c.theme = new_mode);
+    }
+
+    if close || ui.ctx().input(|i| i.key_pressed(egui::Key::Escape)) {
+        app::shared().settings_open = false;
+    }
+}
+
+/// 设置里的一行：左边标题 + 说明，右边开关。
+fn setting_switch(ui: &mut egui::Ui, title: &str, hint: &str, value: &mut bool) {
+    let pal = theme::palette();
+    let width = ui.available_width();
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 54.0), egui::Sense::hover());
+
+    ui.painter().text(
+        egui::pos2(rect.left(), rect.center().y - 9.0),
+        egui::Align2::LEFT_CENTER,
+        title,
+        egui::FontId::proportional(13.5),
+        pal.text,
+    );
+    ui.painter().text(
+        egui::pos2(rect.left(), rect.center().y + 10.0),
+        egui::Align2::LEFT_CENTER,
+        hint,
+        egui::FontId::proportional(11.5),
+        pal.text_dim,
+    );
+
+    let mut child = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rect)
+            .layout(egui::Layout::right_to_left(egui::Align::Center)),
+    );
+    switch(&mut child, value);
 }
 
 /// 单个动作卡片。

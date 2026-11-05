@@ -78,12 +78,21 @@ fn dark_palette() -> Palette {
     }
 }
 
-/// 主题偏好：默认跟随系统，可用环境变量 `TRAYPILOT_THEME=light|dark` 强制。
+/// 主题偏好：环境变量 `TRAYPILOT_THEME=light|dark` 优先（调试用），
+/// 否则取设置里的选择（默认跟随系统）。
+///
+/// 注意：内部会加锁读配置，调用时不要持有 `app::shared()` 的锁。
 pub fn theme_preference() -> egui::ThemePreference {
     match std::env::var("TRAYPILOT_THEME").as_deref() {
-        Ok("light") => egui::ThemePreference::Light,
-        Ok("dark") => egui::ThemePreference::Dark,
-        _ => egui::ThemePreference::System,
+        Ok("light") => return egui::ThemePreference::Light,
+        Ok("dark") => return egui::ThemePreference::Dark,
+        _ => {}
+    }
+    use crate::config::ThemeMode;
+    match crate::app::shared().config.theme {
+        ThemeMode::System => egui::ThemePreference::System,
+        ThemeMode::Light => egui::ThemePreference::Light,
+        ThemeMode::Dark => egui::ThemePreference::Dark,
     }
 }
 
@@ -134,6 +143,12 @@ fn registry_prefers_dark() -> bool {
 
 /// 把主题应用到 egui。每帧调用一次，系统主题变化时自动跟随。
 pub fn apply(ctx: &egui::Context) {
+    // 设置里改了主题就立刻生效（原生标题栏也会跟着变）。
+    let wanted = theme_preference();
+    if ctx.options(|o| o.theme_preference) != wanted {
+        ctx.set_theme(wanted);
+    }
+
     let dark = is_dark(ctx);
     DARK.store(dark, Ordering::Relaxed);
     let pal = palette();
