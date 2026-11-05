@@ -1,0 +1,26 @@
+// 应用程序图标：Windows 取编号最小的图标作为 exe 的显示图标。
+1 ICON "assets/app.ico"
+
+1 VERSIONINFO
+FILEVERSION     0, 1, 0, 0
+PRODUCTVERSION  0, 1, 0, 0
+FILEOS          0x40004L   // VOS_NT_WINDOWS32
+FILETYPE        0x1L       // VFT_APP
+{
+  BLOCK "StringFileInfo"
+  {
+    BLOCK "080404b0"       // 中文(简体)、Unicode
+    {
+      VALUE "FileDescription",  "TrayPilot"
+      VALUE "FileVersion",      "0.1.0"
+      VALUE "ProductName",      "TrayPilot"
+      VALUE "ProductVersion",   "0.1.0"
+      VALUE "OriginalFilename", "tray-pilot.exe"
+      VALUE "LegalCopyright",   "MIT License"
+    }
+  }
+  BLOCK "VarFileInfo"
+  {
+    VALUE "Translation", 0x804, 1200
+  }
+}

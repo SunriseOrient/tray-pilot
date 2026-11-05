@@ -35,6 +35,11 @@ RGBA 数据内嵌（`assets/*.raw`），运行时不需要 SVG 解析器或 PNG 
 
 系统主题切换时托盘图标会自动换成对应配色。
 
+`assets/app.ico`（16/24/32/48/64/128/256 多尺寸）由 `build.rs` 通过
+[winresource](https://github.com/nabijaczleweli/winresource) 编进 exe 的资源段，
+这样资源管理器、任务栏、开始菜单里显示的都是正式图标，版本信息也在同一处定义。
+没有可用的资源编译器时构建会给出警告而不是失败，只是 exe 不带图标。
+
 ## 使用
 
 1. 运行 `tray-pilot.exe`，程序常驻系统托盘，不显示主窗口。
