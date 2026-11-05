@@ -502,7 +502,7 @@ fn initial_popup_spec(ctx: &egui::Context, actions: &[Action]) -> (egui::Pos2, e
     let monitor = ctx
         .input(|i| i.viewport().monitor_size)
         .unwrap_or(egui::vec2(1920.0, 1080.0));
-    let panel_h = popup_panel_height(ctx, actions);
+    let panel_h = popup_panel_height(actions);
     let win_w = POPUP_WIDTH;
     let win_h = panel_h;
     (
@@ -517,7 +517,7 @@ fn popup_spec(
     tray: (f64, f64, f64, f64),
     actions: &[Action],
 ) -> (egui::Pos2, egui::Vec2) {
-    let panel_h = f64::from(popup_panel_height(ctx, actions));
+    let panel_h = f64::from(popup_panel_height(actions));
     let win_w = f64::from(POPUP_WIDTH) + 2.0 * f64::from(WINDOW_MARGIN);
     let win_h = panel_h + 2.0 * f64::from(WINDOW_MARGIN);
 
@@ -545,16 +545,8 @@ fn popup_spec(
 /// 弹出菜单面板的高度（点）。
 ///
 /// 每个动作条目带一行自动换行的说明，高度逐个实测，保证窗口装得下全部内容。
-pub fn popup_panel_height(ctx: &egui::Context, actions: &[Action]) -> f32 {
-    let inner_width = POPUP_WIDTH - 2.0 * MENU_PADDING;
-    let items: f32 = actions
-        .iter()
-        .map(|a| {
-            crate::ui::menu_item_height(ctx, Some(&a.description), inner_width)
-        })
-        .sum();
-
-    let content = items
+pub fn popup_panel_height(actions: &[Action]) -> f32 {
+    let content = actions.len() as f32 * MENU_ITEM_HEIGHT
         + if actions.is_empty() { 0.0 } else { 11.0 }
         + 2.0 * MENU_ITEM_HEIGHT;
     content + 2.0 * MENU_PADDING
