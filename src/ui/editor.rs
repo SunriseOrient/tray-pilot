@@ -30,7 +30,7 @@ const MODAL_HEIGHT: f32 = 388.0;
 /// 新建 / 编辑弹窗尺寸。
 const MODAL_SIZE: egui::Vec2 = egui::vec2(440.0, MODAL_HEIGHT);
 /// 设置弹窗尺寸。
-const SETTINGS_SIZE: egui::Vec2 = egui::vec2(400.0, 236.0);
+const SETTINGS_SIZE: egui::Vec2 = egui::vec2(400.0, 224.0);
 /// 删除确认尺寸。
 const CONFIRM_SIZE: egui::Vec2 = egui::vec2(320.0, 156.0);
 
