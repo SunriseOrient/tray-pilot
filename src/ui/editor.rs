@@ -40,6 +40,9 @@ pub fn show(ui: &mut egui::Ui) {
         return;
     }
 
+    // 尺寸兜底：见 enforce_fixed_size 的说明。
+    enforce_fixed_size(ui);
+
     let (draft_active, confirm_delete) = {
         let sh = app::shared();
         (sh.draft.is_some(), sh.confirm_delete.clone())
@@ -59,6 +62,52 @@ pub fn show(ui: &mut egui::Ui) {
             }
         }
     });
+}
+
+/// 把窗口尺寸钉回预设值。
+///
+/// 窗口本身已经关掉了 `WS_SIZEBOX`，用户拖不动边框；但当窗口在两块缩放比例
+/// 不同的显示器之间拖动时，Windows 会反复发送 `WM_DPICHANGED`（窗口横跨交界
+/// 线时会来回翻转）。winit 每次都用「记住的旧缩放比例」去换算新尺寸，一旦这个
+/// 记录滞后，尺寸就会被反复乘以缩放比，表现为宽度越拖越长或越拖越窄。
+///
+/// 这里每帧检查一次实际尺寸：只要不是最大化状态且尺寸偏离预设值，就重新请求
+/// 一次预设尺寸。`InnerSize` 用的是逻辑点，所以无论当前在哪块屏幕都会落到
+/// 正确的物理尺寸上。加 250ms 节流，避免和系统的 DPI 调整互相拉扯。
+fn enforce_fixed_size(ui: &mut egui::Ui) {
+    let ctx = ui.ctx();
+    let Some(desired) = app::shared().editor.as_ref().map(|e| e.size) else {
+        return;
+    };
+
+    let (size, maximized) = ctx.input(|i| {
+        let vp = i.viewport();
+        (vp.inner_rect.map(|r| r.size()), vp.maximized.unwrap_or(false))
+    });
+    if maximized {
+        return;
+    }
+    let Some(size) = size else {
+        return;
+    };
+
+    const TOLERANCE: f32 = 2.5;
+    let off_x = (size.x - desired.x).abs();
+    let off_y = (size.y - desired.y).abs();
+    if off_x <= TOLERANCE && off_y <= TOLERANCE {
+        return;
+    }
+
+    // 偏差很大（跨屏瞬间被多乘了一次缩放）时立刻纠正，避免肉眼看到闪一下。
+    let badly_off = off_x > desired.x * 0.1 || off_y > desired.y * 0.1;
+    let now = ctx.input(|i| i.time);
+    let id = egui::Id::unique("tray-pilot::editor-size-fix");
+    let last = ctx.data(|d| d.get_temp::<f64>(id)).unwrap_or(f64::NEG_INFINITY);
+    if !badly_off && now - last < 0.1 {
+        return;
+    }
+    ctx.data_mut(|d| d.insert_temp(id, now));
+    ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(desired));
 }
 
 /// 把整个面板压暗，突出上层的模态框。

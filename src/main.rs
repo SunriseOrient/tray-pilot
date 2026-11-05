@@ -29,7 +29,24 @@ pub fn build_tray_icon(dark_taskbar: bool) -> tray_icon::Icon {
     .expect("托盘图标数据无效")
 }
 
+/// 把进程设为「按显示器感知 DPI」。
+///
+/// 必须放在**最前面**：只要创建过任何窗口，Windows 就会把进程的 DPI 感知
+/// 锁死在当时的状态。托盘图标是在 winit 初始化之前创建的，如果不先设置，
+/// 进程会落到「系统 DPI 感知」，拖到另一块不同缩放比例的屏幕上时系统只会
+/// 做位图拉伸——表现为窗口宽度被一路拉长、内容发虚。
+fn enable_per_monitor_dpi() {
+    use windows::Win32::UI::HiDpi::{
+        SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+    };
+    unsafe {
+        let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    enable_per_monitor_dpi();
+
     // 载入配置
     {
         let mut shared = app::shared();

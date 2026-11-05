@@ -14,7 +14,8 @@ Windows 托盘常用动作工具。
   动作说明显示在悬停提示中。
 - **居中编辑面板**：原生窗口 + 系统标题栏，新建 / 编辑 / 删除动作，
   删除前会弹出确认框；可整体开关「以管理员身份运行」。
-  窗口尺寸固定（只支持默认大小与最大化，不可拖拽改大小）。
+  窗口尺寸固定（只支持默认大小与最大化，不可拖拽改大小），
+  在两块缩放比例不同的显示器之间拖动时也会自动保持正确尺寸。
 - **管理员执行**：指令交给 Windows PowerShell（若已安装 PowerShell 7 则优先使用 `pwsh`），
   通过 `runas` 动词触发 UAC 提权，控制台窗口隐藏，标准输出与错误输出写入日志文件。
 - **现代化界面**：跟随 Windows 的浅色 / 深色设置自动切换。
@@ -104,7 +105,12 @@ Rust · [egui](https://github.com/emilk/egui) 0.37 · [eframe](https://github.co
 [tray-icon](https://github.com/tafia/tray-icon) · [windows](https://github.com/microsoft/windows-rs)
 
 弹出菜单使用 egui 多视口实现的无边框透明窗口（原生右键菜单外观），
-编辑面板使用带系统标题栏的原生窗口，两者都按系统 DPI 缩放。
+编辑面板使用带系统标题栏的原生窗口。
+
+程序启动时会先把进程设为 **Per-Monitor V2** DPI 感知（`SetProcessDpiAwarenessContext`）。
+这一步必须在创建任何窗口之前完成——托盘图标早于 winit 初始化创建，否则进程会被
+锁成系统 DPI 感知，跨屏时只能做位图拉伸。另外编辑面板每帧会校验一次窗口尺寸并
+在偏离时重新请求，抵消跨屏瞬间 DPI 反复翻转导致的大小漂移。
 
 ## 许可
 
