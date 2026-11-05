@@ -9,7 +9,8 @@ use crate::app::{self, Draft};
 use crate::config::{Action, ThemeMode};
 use crate::theme;
 use crate::ui::{
-    fill_rounded, flat_button, hairline, segmented, switch, ButtonKind,
+    close_button, fill_rounded, flat_button, hairline, modal_blocker, segmented, switch,
+    ButtonKind,
 };
 
 /// 按水平 / 垂直内缩得到新的矩形。
@@ -26,6 +27,17 @@ const ROW_HEIGHT: f32 = 64.0;
 const SETTING_ROW_HEIGHT: f32 = 48.0;
 /// 新建 / 编辑弹窗高度。
 const MODAL_HEIGHT: f32 = 420.0;
+/// 新建 / 编辑弹窗尺寸。
+const MODAL_SIZE: egui::Vec2 = egui::vec2(440.0, MODAL_HEIGHT);
+/// 设置弹窗尺寸。
+const SETTINGS_SIZE: egui::Vec2 = egui::vec2(400.0, 236.0);
+/// 删除确认尺寸。
+const CONFIRM_SIZE: egui::Vec2 = egui::vec2(320.0, 156.0);
+
+/// 居中弹窗的矩形。
+fn sheet_rect(panel: egui::Rect, size: egui::Vec2) -> egui::Rect {
+    egui::Rect::from_center_size(panel.center(), size)
+}
 
 /// 按比例调整颜色的透明度（用于淡入淡出）。
 fn fade(color: egui::Color32, alpha: f32) -> egui::Color32 {
@@ -56,15 +68,29 @@ pub fn show(ui: &mut egui::Ui) {
     ui.scope_builder(egui::UiBuilder::new().max_rect(content), |ui| {
         if draft_active {
             dim_background(ui, panel);
-            show_modal(ui, panel);
+            let sheet = sheet_rect(panel, MODAL_SIZE);
+            // 表单里有用户输入，点外面只拦截、不关闭，避免误丢内容。
+            modal_blocker(ui, panel, sheet, "tray-pilot::modal-block::draft");
+            show_modal(ui, sheet);
         } else {
             show_content(ui, panel);
             if settings_open {
                 dim_background(ui, panel);
-                show_settings(ui, panel);
+                let sheet = sheet_rect(panel, SETTINGS_SIZE);
+                let outside = modal_blocker(ui, panel, sheet, "tray-pilot::modal-block::settings");
+                show_settings(ui, sheet);
+                // 点弹窗外面就关掉（设置即时生效，没有「未保存」的概念）。
+                if outside {
+                    app::shared().settings_open = false;
+                }
             } else if confirm_delete.is_some() {
                 dim_background(ui, panel);
-                show_delete_confirm(ui, panel);
+                let sheet = sheet_rect(panel, CONFIRM_SIZE);
+                let outside = modal_blocker(ui, panel, sheet, "tray-pilot::modal-block::confirm");
+                show_delete_confirm(ui, sheet);
+                if outside {
+                    app::shared().confirm_delete = None;
+                }
             }
         }
     });
@@ -329,10 +355,8 @@ fn row_action(ui: &mut egui::Ui, label: &str, kind: ButtonKind, alpha: f32) -> b
 }
 
 /// 设置。
-fn show_settings(ui: &mut egui::Ui, panel: egui::Rect) {
+fn show_settings(ui: &mut egui::Ui, rect: egui::Rect) {
     let pal = theme::palette();
-
-    let rect = egui::Rect::from_center_size(panel.center(), egui::vec2(400.0, 236.0));
     paint_sheet(ui, rect, 12);
 
     let (elevate, autostart, mode) = {
@@ -350,18 +374,23 @@ fn show_settings(ui: &mut egui::Ui, panel: egui::Rect) {
         ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
         let width = ui.available_width();
 
-        ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new("设置")
-                    .size(13.0)
-                    .color(pal.text_dim),
-            );
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if flat_button(ui, "完成", egui::vec2(52.0, 24.0), ButtonKind::Primary).clicked() {
-                    done = true;
-                }
-            });
-        });
+        // 标题栏：左边标题，右上角关闭按钮。
+        let (head, _) = ui.allocate_exact_size(egui::vec2(width, 24.0), egui::Sense::hover());
+        ui.painter().text(
+            egui::pos2(head.left(), head.center().y),
+            egui::Align2::LEFT_CENTER,
+            "设置",
+            egui::FontId::proportional(13.0),
+            pal.text_dim,
+        );
+        let mut lead = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(head)
+                .layout(egui::Layout::right_to_left(egui::Align::Center)),
+        );
+        if close_button(&mut lead).clicked() {
+            done = true;
+        }
         ui.add_space(12.0);
         hairline(ui, width, 0.0);
 
@@ -450,7 +479,7 @@ fn setting_switch(ui: &mut egui::Ui, row: egui::Rect, title: &str, hint: &str, v
 }
 
 /// 删除确认。
-fn show_delete_confirm(ui: &mut egui::Ui, panel: egui::Rect) {
+fn show_delete_confirm(ui: &mut egui::Ui, rect: egui::Rect) {
     let Some(id) = app::shared().confirm_delete.clone() else {
         return;
     };
@@ -465,7 +494,6 @@ fn show_delete_confirm(ui: &mut egui::Ui, panel: egui::Rect) {
     };
     let pal = theme::palette();
 
-    let rect = egui::Rect::from_center_size(panel.center(), egui::vec2(320.0, 156.0));
     paint_sheet(ui, rect, 12);
 
     let inner = inset(rect, 22.0, 20.0);
@@ -514,10 +542,8 @@ fn show_delete_confirm(ui: &mut egui::Ui, panel: egui::Rect) {
 }
 
 /// 新建 / 编辑动作。
-fn show_modal(ui: &mut egui::Ui, panel: egui::Rect) {
+fn show_modal(ui: &mut egui::Ui, rect: egui::Rect) {
     let pal = theme::palette();
-
-    let rect = egui::Rect::from_center_size(panel.center(), egui::vec2(440.0, MODAL_HEIGHT));
     paint_sheet(ui, rect, 12);
 
     let Some(mut draft) = app::shared().draft.take() else {

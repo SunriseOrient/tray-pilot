@@ -94,6 +94,58 @@ pub fn flat_button(
     response
 }
 
+/// 关闭按钮：手绘的叉号，悬停时出现淡底。
+///
+/// 不用字形，避免不同系统字体把「×」画得大小不一。
+pub fn close_button(ui: &mut egui::Ui) -> egui::Response {
+    let pal = theme::palette();
+    let size = egui::vec2(24.0, 24.0);
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+
+    if response.hovered() {
+        fill_rounded(ui.painter(), rect, 6, pal.bg_soft, egui::Stroke::NONE);
+    }
+
+    let color = if response.hovered() {
+        pal.text
+    } else {
+        pal.text_dim
+    };
+    let stroke = egui::Stroke::new(1.4, color);
+    let c = rect.center();
+    let r = 4.0;
+    ui.painter()
+        .line_segment([c - egui::vec2(r, r), c + egui::vec2(r, r)], stroke);
+    ui.painter()
+        .line_segment([c + egui::vec2(r, -r), c + egui::vec2(-r, r)], stroke);
+
+    response
+}
+
+/// 模态弹窗的输入拦截层。
+///
+/// 弹窗打开后，下面被压暗的内容仍然会响应鼠标和键盘——那会让用户误以为
+/// 还能操作。这里在整个面板上铺一层不可见的交互区：它是在背景内容**之后**
+/// 添加的，因此在同一层里盖在上面，命中测试优先命中它，背景就收不到点击了。
+/// 弹窗自身的控件再在它之后添加，所以照常可用。
+///
+/// 返回是否点了 `sheet` 以外的区域（可以用来实现「点外部关闭」）。
+pub fn modal_blocker(
+    ui: &mut egui::Ui,
+    panel: egui::Rect,
+    sheet: egui::Rect,
+    id: &str,
+) -> bool {
+    let response = ui.interact(panel, egui::Id::unique(id), egui::Sense::click_and_drag());
+    if !response.clicked() {
+        return false;
+    }
+    // 只有点在弹窗外面才算「外部点击」；点弹窗里的空白处不算。
+    ui.ctx()
+        .input(|i| i.pointer.interact_pos())
+        .is_some_and(|p| !sheet.contains(p))
+}
+
 /// 细分隔线。`inset` 是左侧留白，用来做列表的分组缩进。
 pub fn hairline(ui: &mut egui::Ui, width: f32, inset: f32) {
     let pal = theme::palette();
