@@ -97,7 +97,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("TrayPilot")
+            .with_title("TrayPilot Host")
             .with_inner_size(egui::vec2(1.0, 1.0))
             .with_visible(false)
             .with_decorations(false)

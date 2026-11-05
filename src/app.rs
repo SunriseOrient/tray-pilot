@@ -38,7 +38,7 @@ pub fn app_icon() -> Arc<egui::IconData> {
 /// 弹出菜单窗口标题。
 pub const POPUP_TITLE: &str = "TrayPilot Menu";
 /// 编辑面板窗口标题。
-pub const EDITOR_TITLE: &str = "TrayPilot Actions";
+pub const EDITOR_TITLE: &str = "TrayPilot";
 
 /// 弹出菜单视口 ID。
 pub fn popup_id() -> egui::ViewportId {
