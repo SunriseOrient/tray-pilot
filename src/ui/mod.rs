@@ -152,10 +152,24 @@ pub fn menu_separator(ui: &mut egui::Ui, width: f32) {
     ui.add_space(4.0);
 }
 
+/// 菜单条目的左右内边距（供宽度计算复用）。
+pub const MENU_ITEM_H_PADDING: f32 = 10.0;
 /// 菜单条目的左右内边距。
-const MENU_PAD_H: f32 = 10.0;
+const MENU_PAD_H: f32 = MENU_ITEM_H_PADDING;
 /// 菜单条目标题字号。
 const MENU_NAME_SIZE: f32 = 13.0;
+
+/// 菜单条目里一行文字需要多宽（不含内边距）。
+pub fn menu_label_width(ctx: &egui::Context, text: &str) -> f32 {
+    ctx.debug_painter()
+        .layout_no_wrap(
+            text.to_owned(),
+            egui::FontId::proportional(MENU_NAME_SIZE),
+            egui::Color32::WHITE,
+        )
+        .size()
+        .x
+}
 
 /// 菜单条目：单行文字，悬停时淡底。不用彩色高亮。
 pub fn menu_item(ui: &mut egui::Ui, title: &str, id: &str, width: f32) -> egui::Response {

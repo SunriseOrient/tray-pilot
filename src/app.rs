@@ -10,7 +10,9 @@ use crate::config::{Action, AppConfig};
 use crate::{exec, theme};
 
 /// 弹出菜单面板宽度（点）。
-pub const POPUP_WIDTH: f32 = 268.0;
+/// 弹出菜单的宽度上下限（点）。实际宽度按最长动作名自动收缩。
+pub const POPUP_WIDTH_MIN: f32 = 150.0;
+pub const POPUP_WIDTH_MAX: f32 = 300.0;
 /// 菜单条目高度（点）。
 pub const MENU_ITEM_HEIGHT: f32 = 30.0;
 /// 菜单内容内边距（点）。
@@ -503,7 +505,7 @@ fn initial_popup_spec(ctx: &egui::Context, actions: &[Action]) -> (egui::Pos2, e
         .input(|i| i.viewport().monitor_size)
         .unwrap_or(egui::vec2(1920.0, 1080.0));
     let panel_h = popup_panel_height(actions);
-    let win_w = POPUP_WIDTH;
+    let win_w = popup_panel_width(ctx, actions);
     let win_h = panel_h;
     (
         egui::pos2(monitor.x - win_w - 8.0, monitor.y - 48.0 - win_h),
@@ -518,7 +520,8 @@ fn popup_spec(
     actions: &[Action],
 ) -> (egui::Pos2, egui::Vec2) {
     let panel_h = f64::from(popup_panel_height(actions));
-    let win_w = f64::from(POPUP_WIDTH) + 2.0 * f64::from(WINDOW_MARGIN);
+    let win_w =
+        f64::from(popup_panel_width(ctx, actions)) + 2.0 * f64::from(WINDOW_MARGIN);
     let win_h = panel_h + 2.0 * f64::from(WINDOW_MARGIN);
 
     // 以托盘图标所在显示器的缩放比例换算物理像素 → 逻辑像素。
@@ -540,6 +543,31 @@ fn popup_spec(
         egui::pos2((phys_x / scale) as f32, (phys_y / scale) as f32),
         egui::vec2(win_w as f32, win_h as f32),
     )
+}
+
+/// 弹出菜单的宽度（点）。
+///
+/// 按最长的一条名字实测宽度，加上条目左右内边距和面板内边距；
+/// 名字都很短时菜单就窄，不让它固定占着一大块。
+pub fn popup_panel_width(ctx: &egui::Context, actions: &[Action]) -> f32 {
+    // 「编辑」「退出」也要放得下。
+    let mut widest = ["编辑", "退出"]
+        .iter()
+        .map(|label| crate::ui::menu_label_width(ctx, label))
+        .fold(0.0_f32, f32::max);
+
+    for action in actions {
+        widest = widest.max(crate::ui::menu_label_width(ctx, &action.name));
+    }
+
+    // 条目左右内边距 + 面板左右内边距 + 一点余量，避免最长的名字贴边。
+    let needed = widest + app_menu_h_padding();
+    needed.clamp(POPUP_WIDTH_MIN, POPUP_WIDTH_MAX)
+}
+
+/// 菜单宽度的固定开销：条目内边距 + 面板内边距 + 余量。
+fn app_menu_h_padding() -> f32 {
+    crate::ui::MENU_ITEM_H_PADDING * 2.0 + MENU_PADDING * 2.0 + 10.0
 }
 
 /// 弹出菜单面板的高度（点）。
